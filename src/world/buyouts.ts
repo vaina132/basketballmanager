@@ -60,7 +60,7 @@ export function quoteContractBuyout(state: SeasonState, playerId: string, clubId
   else if (getTransferPaymentSummary(state, clubId).overdue > 0) reason = 'Settle overdue transfer payments before buying out a contract.';
   else if (cash < amount) reason = 'The buyout exceeds your Spending left after protecting salaries and transfer commitments.';
   else if (rosterSizeAfter < minRosterSize(state, clubId) && addMarketDays(state.date, 1) > window.closesOn) reason = 'Keep a reply day available to sign a replacement before recruitment closes.';
-  // Format 101 (`squad-refresh.ts`): a later season already above its wages budget (contracts agreed with extra wage room,
+  // Format 102 (`squad-refresh.ts`): a later season already above its wages budget (contracts agreed with extra wage room,
   // which reaches only next season) refuses only a buyout that leaves it further above, not one that brings it down.
   const tolerance = (year: number) => { if (!usesSquadRefresh(state)) return 0; const before = getClubContractSummary(state, clubId, year); return Math.max(0, before.seasonWages + before.reservedWages + before.minimumReserve - before.budget); };
   if (reason === null) for (let year = startsSeason; year <= endsSeason; year += 1) {

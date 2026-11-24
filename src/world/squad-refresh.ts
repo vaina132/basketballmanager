@@ -10,7 +10,7 @@ import { usesSpendingBalance } from './spending-balance';
 import { SCOUTING_ATTRIBUTES, scoutingActualAttributes } from './scouting-policy';
 
 /**
- * Format 101 (owner decision, 24 November 2026, provisional number: "rich clubs with a full squad should refresh it:
+ * Format 102 (owner decision, 24 November 2026, provisional number: "rich clubs with a full squad should refresh it:
  * sell or release a weak player to make room for a better one"). Reversible game defaults, not researched figures.
  *
  * Measured before (format 89 and 99): a rich club whose squad was already full (Breogán) could not turn its spending
@@ -52,23 +52,23 @@ export const SQUAD_REFRESH_RULES = Object.freeze({
   secondRefreshAppetite: 0.5,
 });
 
-/** Format 101: whether the career's world carries the squad refresh (new careers with the spending balance). */
+/** Format 102: whether the career's world carries the squad refresh (new careers with the spending balance). */
 export function usesSquadRefresh(context: WorldContext | undefined): boolean {
   return context?.world?.squadRefresh === true && usesSpendingBalance(context);
 }
 
-/** Format 101: the refreshes (contract releases) a club has made in this offseason window. */
+/** Format 102: the refreshes (contract releases) a club has made in this offseason window. */
 export function refreshesThisWindow(state: SeasonState, clubId: string): number {
   return getMarketWindow(state)?.events.filter(event => event.type === 'buyout' && event.clubId === clubId).length ?? 0;
 }
 
-/** Format 101: the refreshes a club may make in one window, by its squad appetite (0 when it does not spend from a surplus). */
+/** Format 102: the refreshes a club may make in one window, by its squad appetite (0 when it does not spend from a surplus). */
 export function refreshLimit(state: SeasonState, clubId: string): number {
   if (!usesSquadRefresh(state) || !spendsSurplus(state, clubId)) return 0;
   return clubAppetite(state, clubId, 'squad') >= SQUAD_REFRESH_RULES.secondRefreshAppetite ? 2 : 1;
 }
 
-/** Format 101: whether a player is a young prospect a club keeps (too young, or young with potential left). */
+/** Format 102: whether a player is a young prospect a club keeps (too young, or young with potential left). */
 export function protectedProspect(state: SeasonState, playerId: string): boolean {
   const age = getCareerPlayerAge(state, playerId, state.date);
   if (age === null) return false;
@@ -77,7 +77,7 @@ export function protectedProspect(state: SeasonState, playerId: string): boolean
 }
 
 /**
- * Format 101: the players a club may release to refresh its squad, weakest first (`rating` is the club's recruitment
+ * Format 102: the players a club may release to refresh its squad, weakest first (`rating` is the club's recruitment
  * rating; `cost` the release's price); empty when releasing one would take the squad below its minimum.
  */
 export function releaseCandidates(state: SeasonState, clubId: string, contracts: readonly EmploymentContract[], rating: (playerId: string) => number, busy: ReadonlySet<string>, cost: (playerId: string) => number): string[] {
@@ -89,13 +89,13 @@ export function releaseCandidates(state: SeasonState, clubId: string, contracts:
     .slice(0, SQUAD_REFRESH_RULES.weakestConsidered);
 }
 
-/** Format 101: a player's rating for a refresh: the sum of his seven real skills (after practice and age). */
+/** Format 102: a player's rating for a refresh: the sum of his seven real skills (after practice and age). */
 export function refreshRating(state: SeasonState, playerId: string): number {
   const attributes = scoutingActualAttributes(state, playerId);
   return SCOUTING_ATTRIBUTES.reduce((sum, key) => sum + attributes[key], 0);
 }
 
-/** Format 101: the most a refresh may cost (the release plus any transfer fee): the club's planned spending from its surplus. */
+/** Format 102: the most a refresh may cost (the release plus any transfer fee): the club's planned spending from its surplus. */
 export function refreshBudget(state: SeasonState, clubId: string): number {
   return usesSquadRefresh(state) ? plannedSurplusSpend(state, clubId) : 0;
 }

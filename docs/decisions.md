@@ -657,7 +657,7 @@ Owner decision (24 November): fix "cash piles up" (ten-season careers: EuroLeagu
 - NBA revenue by market $260M / $360M / $600M (was $300M / $450M / $750M), so player wages are about half of revenue; payroll ceilings unchanged.
 - Measured, ten automatic seasons (Spain seed 11; NBA alone seed 7), season-end cash in season 10, before -> after: EuroLeague median/max 65/163% -> 63/121%; top-division upper half 56/255% -> 61/171%; lower half 48/111% -> 65/65%; second division 68/354% -> 69/179%; NBA median $648M -> $217M, max $1,006M -> $372M (57/77% of revenue), wages 39% -> 47% of revenue. No unpaid costs; every strict save check passed. Spain was identical to format 97 for six seasons (no club above its kept share). Knob if the tail should be lower: `takeShare` [1, 0.5] -> [1, 0.75].
 
-## Squad refresh (format 101, provisional number, 24 November 2026, reversible)
+## Squad refresh (format 102, provisional number, 24 November 2026, reversible)
 
 Owner decision (24 November): rich clubs with a full squad should refresh it: sell or release a weak player to make room for a better one (the format-89 finding: Breogán's full squad left its spending appetite nothing to buy). New careers with the spending balance only (`world.squadRefresh`; `SQUAD_REFRESH_RULES` in `src/world/squad-refresh.ts`, `refreshSquad` in `src/world/market.ts`):
 
@@ -684,3 +684,12 @@ Ten-season automatic careers found a delegated manager of a mid club dismissed a
 - Without a club a good name fades at most 10 points below the reputation left with (still towards 30).
 - In a world of the NBA alone, NBA clubs in the lower half of the record ask an unemployed manager 3 points less every five weeks, down to 30. In combined worlds European jobs remain the way back.
 - Measured on the live pack (delegated managers at mid clubs, 5-6 seasons): computer clubs ending Under pressure fell from 15-44% of club-seasons to 3-17%; Spain, Turkey and NBA managers kept their jobs through the average seasons that had cost them before, and the NBA manager dismissed after a poor fourth season was hired by an NBA club a year later.
+
+## EuroLeague clubs are bigger jobs without the NBA (format 100, provisional number; owner decision, 24 November 2026, reversible)
+
+In careers without the NBA, clubs playing in that season's EuroLeague now rank above other top-division clubs, the order worlds with the NBA already use (format 91). New careers in worlds with a EuroLeague and without the NBA carry `world.euroleagueJobs` (`src/world/euroleague-jobs.ts`); older careers keep ordering by league tier and replay exactly.
+
+- Job offers: EuroLeague clubs first, then the top division, then lower divisions; within a level, the highest requirement first, as before.
+- Requirement: a EuroLeague club asks for the usual requirement for its place plus 6 (one place higher), and never less than 60 at the top of its domestic table falling evenly to 50 at the bottom. A starting manager (reputation 45) cannot take a collapsing EuroLeague club; a manager with good seasons can. Both numbers are reversible defaults.
+- As with NBA jobs, a EuroLeague job beyond the manager's reputation is never the job of last resort while another club can take him, so the format-98 way back through ordinary clubs stays.
+- Board expectations do not read the job order and are unchanged. Coach ratings and the head-coach market already rated EuroLeague clubs above other top-division clubs in every world (format 82). Worlds with the NBA keep the format-91 rules (there a EuroLeague club asks the usual requirement).

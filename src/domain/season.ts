@@ -241,8 +241,9 @@ export interface DomesticDivisions {
 /** Format 97 (release check "long careers"): fixes for new careers in worlds with researched club money (`world.longCareers`, `src/world/long-careers.ts`). */
 /** Format 98 (manager careers): board and career balance for new careers (`world.careerBalance`, `src/world/career-balance.ts`). */
 /** Format 99 (owner decision 24 November 2026, provisional number): cash no longer piles up in new careers with researched club money (`world.cashBalance`, `src/world/cash-balance.ts`). */
-/** Format 101 (owner decision 24 November 2026, provisional number): rich clubs with a full squad refresh it in new careers with surplus spending (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
-export const SEASON_SCHEMA_VERSION = 101;
+/** Format 100 (owner decision 24 November 2026, provisional number): EuroLeague clubs are bigger jobs than other top-division clubs in new careers without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`). */
+/** Format 102 (owner decision 24 November 2026, provisional number): rich clubs with a full squad refresh it in new careers with the spending balance (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
+export const SEASON_SCHEMA_VERSION = 102;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

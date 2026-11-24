@@ -22,7 +22,7 @@ import { protectedProspect, refreshLimit, refreshesThisWindow, releaseCandidates
 import type { EmploymentContract } from '../src/domain/employment';
 
 /**
- * Format 101 (owner decision 24 November 2026, `world.squadRefresh`): a rich club run automatically with a full squad
+ * Format 102 (owner decision 24 November 2026, `world.squadRefresh`): a rich club run automatically with a full squad
  * releases a weak player (the existing contract buyout) to sign a clearly better one of the same position. Worlds without
  * the marker keep their rules.
  */
@@ -60,7 +60,7 @@ function offseason(squadRefresh = true): { before: SeasonState; after: SeasonSta
 }
 const buyoutsOf = (state: SeasonState) => (getMarketWindow(state)?.events ?? []).filter(event => event.type === 'buyout') as { clubId: string; playerId: string }[];
 
-describe('the squad refresh marker (format 101)', () => {
+describe('the squad refresh marker (format 102)', () => {
   it('marks new careers with the spending balance only, and older formats refuse the marker', () => {
     const state = career();
     expect(state.world!.squadRefresh).toBe(true);
@@ -70,8 +70,8 @@ describe('the squad refresh marker (format 101)', () => {
     expect(createSeason({ seed: 4, ...NEW_CAREER_SYSTEMS }).world?.squadRefresh).toBeUndefined();
     expect(() => createSeason({ seed: 4, world: WORLD, squadRefresh: 'yes' as unknown as boolean })).toThrow(/squad refresh setting/);
     const envelope = JSON.parse(serializeSeason(state));
-    envelope.formatVersion = 100; envelope.state.schemaVersion = 100;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/squadRefresh.*format 101/);
+    envelope.formatVersion = 101; envelope.state.schemaVersion = 101;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/squadRefresh.*format 102/);
     // A career without the marker still loads as an older format.
     const older = JSON.parse(serializeSeason(career(false)));
     older.formatVersion = 99; older.state.schemaVersion = 99;

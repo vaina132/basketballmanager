@@ -264,7 +264,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
     if (club.id === state.managedClubId && !state.employment.delegated || leaving.has(club.id)) continue;
     // Format 95: an NBA club keeps room for its first-round picks until the draft is over.
     const target = clubRosterTarget(state, club.id, club.id === state.managedClubId ? 10 : MIN_ROSTER_SIZE) - draftRoomFor(next, club.id);
-    // Format 101: a rich club with a full squad releases a weak player to sign a clearly better one (`squad-refresh.ts`).
+    // Format 102: a rich club with a full squad releases a weak player to sign a clearly better one (`squad-refresh.ts`).
     next = refreshSquad(next, club.id, target, finalProposalDay);
     for (let count = 0; count < target; count += 1) {
       const summary = getClubContractSummary(next, club.id);
@@ -347,7 +347,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
 }
 
 /**
- * Format 101 (`squad-refresh.ts`, owner decision 24 November 2026): a club run automatically that spends from a surplus
+ * Format 102 (`squad-refresh.ts`, owner decision 24 November 2026): a club run automatically that spends from a surplus
  * and has a full squad releases one of its weakest players (the existing contract buyout) when a clearly better player
  * of the same position is affordable once the released wage is freed, and offers him a contract at once (a free agent,
  * or a paid transfer, the release and the fee within its planned spending, `refreshBudget`). Both are recorded commands, so the save check replays them; a lost

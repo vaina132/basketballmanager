@@ -30,6 +30,7 @@ import './board-panel.css'
 import { formatMoney } from './money-format'
 import { usesWagePool } from '../world/wage-pool'
 import { balancedReviewText, balancedTargetText, careerBalanceNote, usesCareerBalance } from '../world/career-balance'
+import { euroleagueJobsNote } from '../world/euroleague-jobs'
 import { usesSixLevels } from '../world/facilities-policy'
 
 interface BoardPanelProps {
@@ -206,7 +207,7 @@ function CareerSection({ season, busy, onEnableCareerMoves, onResign }: { season
       {refusal ? <p className="board-resign-refusal" role="status">{refusal}</p> : <button id="board-resign-button" className="button" onClick={() => setResigning(true)} disabled={busy}>See the jobs on offer</button>}
     </details>}
     {offers && <SeasonEndChoice season={season} outlook={offers} busy={busy} onChoose={clubId => { setResigning(false); if (clubId !== null) onResign!(clubId) }} onClose={() => setResigning(false)} />}
-    <MoreInfo label="How your job works"><p className="board-empty board-career-rule">{(() => { const text = allowsUnemployment(career) ? CAREER_RULE_3 : rules ? CAREER_RULE_2 : CAREER_RULE; const lined = pressureBelow !== undefined && pressureBelow !== 30 ? text.replace('below 30', `below ${pressureBelow}, this president's line`) : text; return allowsUnemployment(career) ? lined + careerBalanceNote(season) : lined })()}</p></MoreInfo>
+    <MoreInfo label="How your job works"><p className="board-empty board-career-rule">{(() => { const text = allowsUnemployment(career) ? CAREER_RULE_3 : rules ? CAREER_RULE_2 : CAREER_RULE; const lined = pressureBelow !== undefined && pressureBelow !== 30 ? text.replace('below 30', `below ${pressureBelow}, this president's line`) : text; return (allowsUnemployment(career) ? lined + careerBalanceNote(season) : lined) + euroleagueJobsNote(season.world) })()}</p></MoreInfo>
   </>
 }
 

@@ -672,7 +672,7 @@ Ten-season automatic careers found a delegated manager of a mid club dismissed a
 - In a world of the NBA alone, NBA clubs in the lower half of the record ask an unemployed manager 3 points less every five weeks, down to 30. In combined worlds European jobs remain the way back.
 - Measured on the live pack (delegated managers at mid clubs, 5-6 seasons): computer clubs ending Under pressure fell from 15-44% of club-seasons to 3-17%; Spain, Turkey and NBA managers kept their jobs through the average seasons that had cost them before, and the NBA manager dismissed after a poor fourth season was hired by an NBA club a year later.
 
-## EuroLeague clubs are bigger jobs without the NBA (format 102, provisional number; owner decision, 24 November 2026, reversible)
+## EuroLeague clubs are bigger jobs without the NBA (format 100, provisional number; owner decision, 24 November 2026, reversible)
 
 In careers without the NBA, clubs playing in that season's EuroLeague now rank above other top-division clubs, the order worlds with the NBA already use (format 91). New careers in worlds with a EuroLeague and without the NBA carry `world.euroleagueJobs` (`src/world/euroleague-jobs.ts`); older careers keep ordering by league tier and replay exactly.
 

@@ -13,7 +13,7 @@ import { EUROLEAGUE_JOB_RULES, euroleagueJobsNote, euroleagueJobsWorld, euroleag
 import { seasonRounds, validateWorld, worldOf } from '../src/world/career-world';
 
 /**
- * Format 102 (provisional; owner decision 24 November 2026): in careers without the NBA, clubs playing in that season's
+ * Format 100: in careers without the NBA, clubs playing in that season's
  * EuroLeague are bigger jobs than other top-division clubs (`world.euroleagueJobs`). Older careers keep the tier order.
  */
 const SPAIN = { id: 'acb', name: 'Liga Endesa', country: 'Spain', tier: 1 as const, levels: [16, 16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8] };
@@ -22,7 +22,7 @@ const withoutMarker = (world: CareerWorld): CareerWorld => { const { euroleagueJ
 const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.activeMatch.status !== 'finished' ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
 const manager = { name: 'Test Manager', dateOfBirth: '1980-05-01', nationality: 'Spain' };
 
-describe('the rules (format 102)', () => {
+describe('the rules (format 100)', () => {
   it('asks a EuroLeague club for one place more than usual, and never less than 50 to 60 by its place', () => {
     expect(euroleagueVacancyRequirement(18, 18, 25)).toBe(EUROLEAGUE_JOB_RULES.weakestRequirement);
     expect(euroleagueVacancyRequirement(1, 18, 127)).toBe(127 + EUROLEAGUE_JOB_RULES.premium);
@@ -37,7 +37,7 @@ describe('the rules (format 102)', () => {
   });
 });
 
-describe('the EuroLeague jobs marker (format 102)', () => {
+describe('the EuroLeague jobs marker (format 100)', () => {
   const pack = economyPack([SPAIN, SPAIN_2], { members: ['acb-1', 'acb-2'] });
   const world = worldFromPack(pack, ['acb', 'leb']);
 
@@ -63,12 +63,12 @@ describe('the EuroLeague jobs marker (format 102)', () => {
     expect(() => createSeason({ seed: 5, world, euroleagueJobs: 'yes' as unknown as boolean })).toThrow(/EuroLeague jobs setting/);
   });
 
-  it('keeps the marker through a strict round trip and refuses it before format 102', () => {
+  it('keeps the marker through a strict round trip and refuses it before format 100', () => {
     const state = createSeason({ seed: 5, world, managedClubId: 'acb-9', manager, ...NEW_CAREER_SYSTEMS });
     const envelope = JSON.parse(serializeSeason(state));
     expect(parseSeason(JSON.stringify(envelope))).toEqual(state);
-    envelope.formatVersion = 101; envelope.state.schemaVersion = 101;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/euroleagueJobs.*format 102/);
+    envelope.formatVersion = 99; envelope.state.schemaVersion = 99;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/euroleagueJobs.*format 100/);
     const wrong = JSON.parse(serializeSeason(state));
     wrong.state.world.euroleagueJobs = false;
     expect(() => parseSeason(JSON.stringify(wrong))).toThrow(/euroleagueJobs/);
@@ -83,7 +83,7 @@ describe('the EuroLeague jobs marker (format 102)', () => {
   });
 });
 
-describe('job offers in a Europe-only world with the EuroLeague (format 102)', () => {
+describe('job offers in a Europe-only world with the EuroLeague (format 100)', () => {
   // Two of the weakest Spanish squads play the EuroLeague, so they finish low in the table and their usual requirement is small.
   const LEAGUE = { ...SPAIN, levels: [16, 16, 15, 14, 13, 12, 11, 10, 6, 6] };
   const world = worldFromPack(economyPack([LEAGUE], { members: ['acb-9', 'acb-10'] }), 'acb');

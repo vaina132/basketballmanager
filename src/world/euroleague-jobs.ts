@@ -1,7 +1,7 @@
 import type { CareerWorld } from '../domain/world';
 
 /**
- * Format 102 (provisional number; owner decision, 24 November 2026; new careers without the NBA, option `euroleagueJobs`,
+ * Format 100 (provisional number; owner decision, 24 November 2026; new careers without the NBA, option `euroleagueJobs`,
  * marker `world.euroleagueJobs`): clubs playing in that season's EuroLeague are bigger jobs than other top-division
  * clubs, the order worlds with the NBA already use (format 91: NBA > EuroLeague clubs > other top division > lower
  * divisions).
@@ -27,7 +27,7 @@ export const EUROLEAGUE_JOB_RULES = Object.freeze({
   premium: 6,
 });
 
-/** Whether this career ranks EuroLeague clubs above other top-division clubs without the NBA (format 102). */
+/** Whether this career ranks EuroLeague clubs above other top-division clubs without the NBA (format 100). */
 export const usesEuroleagueJobs = (world: Pick<CareerWorld, 'euroleagueJobs'> | undefined | null): boolean => !!world?.euroleagueJobs;
 
 /** Whether a new career's world can carry the marker: domestic leagues and a EuroLeague, without the NBA. */
@@ -44,7 +44,7 @@ export function euroleagueVacancyRequirement(position: number, leagueClubs: numb
   return Math.max(floor, usual + premium);
 }
 
-/** Plain-English job rule for careers with the marker (format 102), shown after the offer rule. */
+/** Plain-English job rule for careers with the marker (format 100), shown after the offer rule. */
 export function euroleagueJobsNote(world: CareerWorld | undefined | null): string {
   if (!usesEuroleagueJobs(world)) return '';
   const { bestRequirement, weakestRequirement, premium } = EUROLEAGUE_JOB_RULES;

@@ -524,7 +524,7 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   // Format 97: the long-careers fixes marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'longCareers') && (world.longCareers !== true || !Object.hasOwn(world, 'economy'))) fail('world.longCareers', 'must be true and needs researched club money');
   // Format 98: the board and career balance marker.
-  // Format 102: the EuroLeague jobs marker, only on worlds with domestic leagues and a EuroLeague, without the NBA.
+  // Format 100: the EuroLeague jobs marker, only on worlds with domestic leagues and a EuroLeague, without the NBA.
   if (Object.hasOwn(world, 'euroleagueJobs') && (world.euroleagueJobs !== true || !euroleagueJobsWorld(world))) fail('world.euroleagueJobs', 'must be true and needs a EuroLeague without the NBA');
   if (Object.hasOwn(world, 'careerBalance') && (world.careerBalance !== true || !Object.hasOwn(world, 'domesticLeagues'))) fail('world.careerBalance', 'must be true and needs domestic leagues');
   // Format 99: the cash balance marker, only on worlds with researched money.

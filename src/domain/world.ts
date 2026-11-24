@@ -218,7 +218,7 @@ export interface CareerWorld {
    */
   cashBalance?: true;
   /**
-   * Format 102 (owner decision 24 November 2026, provisional number; new careers with domestic leagues and a EuroLeague,
+   * Format 100 (owner decision 24 November 2026, provisional number; new careers with domestic leagues and a EuroLeague,
    * without the NBA, option `euroleagueJobs`): clubs in that season's EuroLeague are bigger jobs than other top-division
    * clubs: they offer first and ask more of a manager (`src/world/euroleague-jobs.ts`).
    */

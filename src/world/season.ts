@@ -665,7 +665,7 @@ export interface SeasonSystems {
    */
   cashBalance?: boolean;
   /**
-   * Format 102 (owner decision 24 November 2026, provisional number): clubs in that season's EuroLeague are bigger jobs
+   * Format 100 (owner decision 24 November 2026, provisional number): clubs in that season's EuroLeague are bigger jobs
    * than other top-division clubs in worlds without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`).
    * New careers only.
    */
@@ -793,7 +793,7 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   const careerBalance = !!options.careerBalance && !world.careerBalance && !!world.domesticLeagues;
   // Format 99: the cash balance, in worlds with researched club money only (NBA clubs open on the trimmed revenue range).
   if (options.cashBalance && !world.cashBalance && world.economy) world = { ...withCashBalanceNbaRevenue(world), cashBalance: true as const };
-  // Format 102: EuroLeague clubs are bigger jobs, in worlds with a EuroLeague and without the NBA only.
+  // Format 100: EuroLeague clubs are bigger jobs, in worlds with a EuroLeague and without the NBA only.
   if (options.euroleagueJobs && !world.euroleagueJobs && euroleagueJobsWorld(world)) world = { ...world, euroleagueJobs: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }

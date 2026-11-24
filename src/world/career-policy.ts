@@ -100,7 +100,7 @@ export function vacancyRequirement(position: number, clubs: readonly Pick<Team, 
 
 /**
  * The clubs of that season's EuroLeague when they are bigger jobs: in NBA careers (format 91) and in careers with
- * EuroLeague jobs (format 102). Null in other careers, which order jobs by league tier alone.
+ * EuroLeague jobs (format 100). Null in other careers, which order jobs by league tier alone.
  */
 function euroleagueJobClubs(state: CareerContext, seasonNumber: number): ReadonlySet<string> | null {
   const world = state.world;
@@ -113,7 +113,7 @@ function euroleagueJobClubs(state: CareerContext, seasonNumber: number): Readonl
 /**
  * The reputation a club's vacancy asks for, from its place in its own league's table (`fixtures`: the games counted).
  * NBA step 10 (format 91): an NBA job in an NBA career asks for 60-70, or the usual requirement within its conference
- * when higher (`nbaVacancyRequirement`). Format 102: in a career with EuroLeague jobs, a club in that season's EuroLeague
+ * when higher (`nbaVacancyRequirement`). Format 100: in a career with EuroLeague jobs, a club in that season's EuroLeague
  * (`euroleague`) asks for a little more than the usual requirement, and at least 50-60 (`euroleagueVacancyRequirement`).
  * Every other job, and every job in other careers, as `vacancyRequirement`.
  */
@@ -147,7 +147,7 @@ const offersJob = (clubs: readonly Pick<Team, 'id' | 'name'>[], clubId: string) 
 /**
  * A club's level for job offers: its league's tier in that season (1 is a top division); 1 in a world of one league.
  * NBA step 10 (format 91): in an NBA career an NBA club comes first (`NBA_JOB_RULES.nbaLevel`), then a club in that
- * season's EuroLeague (`euroleagueLevel`), then the tiers. Format 102: careers with EuroLeague jobs (worlds without the
+ * season's EuroLeague (`euroleagueLevel`), then the tiers. Format 100: careers with EuroLeague jobs (worlds without the
  * NBA) put that season's EuroLeague clubs first the same way.
  */
 export function clubLevel(state: CareerContext, seasonNumber: number): (clubId: string) => number {
@@ -163,7 +163,7 @@ export function clubLevel(state: CareerContext, seasonNumber: number): (clubId: 
 
 /**
  * NBA step 10 (format 91): whether a club's job is one of the jobs a manager must reach on merit: an NBA job, and
- * (format 102) in a career with EuroLeague jobs, the job of a club in that season's EuroLeague.
+ * (format 100) in a career with EuroLeague jobs, the job of a club in that season's EuroLeague.
  */
 const meritJob = (state: CareerContext, seasonNumber: number): (clubId: string) => boolean => {
   const euroleague = usesEuroleagueJobs(state.world) ? euroleagueJobClubs(state, seasonNumber) : null;
@@ -171,7 +171,7 @@ const meritJob = (state: CareerContext, seasonNumber: number): (clubId: string) 
 };
 
 /**
- * NBA step 10 (format 91): whether a vacancy is beyond a manager as a job of last resort: an NBA job (format 102: or a
+ * NBA step 10 (format 91): whether a vacancy is beyond a manager as a job of last resort: an NBA job (format 100: or a
  * EuroLeague club's job in a career with EuroLeague jobs) asking more than his reputation. Always false in other careers.
  */
 const beyondReach = (merit: (clubId: string) => boolean, reputation: number) => (vacancy: Pick<ClubVacancy, 'clubId' | 'requirement'>) => merit(vacancy.clubId) && vacancy.requirement > reputation;

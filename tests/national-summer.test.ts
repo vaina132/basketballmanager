@@ -33,7 +33,7 @@ function playUntil(start: SeasonState, until: (state: SeasonState) => boolean, o
 describe('the summer tournament in the offseason (format 80)', () => {
   it('is drawn when the qualifiers end and played live by the manager after recruitment, before the season change', () => {
     expect(nationalTournamentDays(1)).toEqual(['2027-08-21', '2027-08-23', '2027-08-25', '2027-08-29', '2027-09-02']);
-    const start = setEmploymentDelegation(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }), true);
+    const start = setEmploymentDelegation(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, generatedPeople: false }), true);
     // The February window closes the qualifiers: the tournament is drawn then, its games still to come.
     let state = playUntil(start, current => !!current.national && !!nationalTournament(current.national, 1));
     const drawn = nationalTournament(state.national!, 1)!;

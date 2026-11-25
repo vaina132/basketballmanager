@@ -6,6 +6,7 @@ import { maxContractWage, MIN_CONTRACT_WAGE } from './employment-policy';
 import { roleWage } from './contract-roles';
 import { nbaLateFreeAgentMinimum } from './nba-cap-policy';
 import { nbaEuropeanDemand } from './nba-moves';
+import { cappedNbaDemand } from './nba-free-agency';
 
 const WAGE_STEP = 50_000;
 export const NEGOTIATION_TERM_PREMIUMS = [0, 5, 10] as const;
@@ -21,7 +22,8 @@ function roleBase(playerId: string, context: CareerPlayerContext, role: SquadRol
   const late = nbaLateFreeAgentMinimum(context, playerId), demand = late !== null && late < base ? late : base;
   // Format 93: a player paid on the NBA's scale asks a European club a European wage (`nba-moves.ts`).
   const european = nbaEuropeanDemand(context, playerId, clubId, demand);
-  return european ?? demand;
+  // Format 103: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
+  return cappedNbaDemand(context, clubId, playerId, european ?? demand);
 }
 
 /** Uniform development contract rule, independent of hidden abilities or invented preferences. */
@@ -31,7 +33,7 @@ export function requiredNegotiationWage(playerId: string, seasons: number, relea
   const clauseReason = releaseFeeReason(releaseFee, context);
   if (clauseReason) throw new Error(clauseReason);
   const premium = releaseFee === undefined ? NEGOTIATION_TERM_PREMIUMS[seasons - 1]! : Math.min(RELEASE_CLAUSE_PREMIUM_CAP, NEGOTIATION_TERM_PREMIUMS[seasons - 1]!);
-  return Math.ceil(base * (100 + premium) / (100 * WAGE_STEP)) * WAGE_STEP;
+  return cappedNbaDemand(context, clubId, playerId, Math.ceil(base * (100 + premium) / (100 * WAGE_STEP)) * WAGE_STEP);
 }
 
 export function getNegotiationDemands(playerId: string, releaseFee?: number, context: CareerPlayerContext = {}, role?: SquadRole, clubId?: string): { baseWage: number; terms: NegotiationTerms[] } {

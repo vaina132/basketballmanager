@@ -4,6 +4,7 @@ import { nbaRegularSeasonEndRound, nbaTaxBills } from '../world/nba-cap-policy';
 import { isNbaPaidPlayer, nbaSalaryFloorShortfall, usesNbaMoves } from '../world/nba-moves';
 import { TRADES_FORMAT, validateTradeAt, validateTradeRecords, validateTradesState } from './trades-validation';
 import { seasonSalaryCeiling, staffAllocationCeiling } from '../world/board-consequences';
+import { NBA_BIRD_STAR_CEILING, usesNbaFreeAgency } from '../world/nba-free-agency';
 import { usesWagePool } from '../world/wage-pool';
 import { usesClubLevelStaff } from '../world/staff-levels';
 import { staffWagesSourceId, staffWeekWages, usesStaffContracts } from '../world/staff-contracts';
@@ -153,7 +154,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -2124,7 +2125,9 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
       // Format 92: an NBA club's minimum contracts it needs for its 13 players fit whatever its owner's ceiling (as the guard allows).
       if (entry.capRoute === 'minimum' && annual.length <= minRosterSize(context, entry.clubId as string)) { if (annual.length > clubRosterLimit(context, entry.clubId as string)) fail(path, 'must fit the club\'s squad limit'); continue; }
-      if (annual.length > clubRosterLimit(context, entry.clubId as string) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year) + surplusRoom(Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
+      // Format 103: Bird rights keep a club's stars past its owner's ceiling, up to the first apron (the guard checks the rating).
+      const birdStar = entry.capRoute === 'bird' && usesNbaFreeAgency(context) ? NBA_BIRD_STAR_CEILING : 0;
+      if (annual.length > clubRosterLimit(context, entry.clubId as string) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(birdStar, Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year) + surplusRoom(Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }
   }
   const employment = normalized;
@@ -3733,6 +3736,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 102 && Object.hasOwn(world, 'squadRefresh')) fail('world.squadRefresh', 'requires format 102 or later');
   // Format 101 (owner decision 24 November 2026): realistic player development is a rule of new careers only.
   if (version < 101 && Object.hasOwn(world, 'playerDevelopment')) fail('world.playerDevelopment', 'requires format 101 or later');
+  // Format 103: NBA free agency that keeps the stars is a rule of new careers only.
+  if (version < 103 && Object.hasOwn(world, 'nbaFreeAgency')) fail('world.nbaFreeAgency', 'requires format 103 or later');
   if (usesNbaDraft({ world }) !== Object.hasOwn(state, 'draft')) fail('draft', 'must be recorded exactly in worlds with the NBA draft');
   const draft = Object.hasOwn(state, 'draft') ? validateDraftShape(state.draft, state as unknown as SeasonState) : undefined;
   // Format 91: NBA careers (real NBA head coaches, NBA job rules).

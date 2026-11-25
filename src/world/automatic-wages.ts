@@ -7,6 +7,9 @@ import { getClubContractSummary } from './employment-policy';
 import { lastSeasonResult, SPENDING_BALANCE_RULES, usesSpendingBalance } from './spending-balance';
 import { isCapClub, minRosterSize } from './club-roster-policy';
 import { nbaOwnerCeiling } from './nba-owner';
+import { nbaDeadMoney } from './nba-cap-policy';
+import { NBA_LOWEST_MINIMUM, nbaMinimumWage } from './nba-cap';
+import { nbaTaxAffordable, usesNbaFreeAgency } from './nba-free-agency';
 
 /**
  * Format 87 (`ECONOMY_BALANCE_RULES.wageCap`): a club's projected cash at the end of the current season as a share of
@@ -82,7 +85,9 @@ export function automaticWageCap(state: SeasonState, clubId: string, seasonNumbe
  * passes, so the cap never stops a club fielding a team. Always true in careers without the economy balance.
  */
 export function automaticWageCheck(state: SeasonState, clubId: string): (seasonWage: number, seasons: number, startsSeason: number) => boolean {
-  if (!usesEconomyBalance(state)) return () => true;
+  // Format 103: an NBA club run automatically keeps any luxury tax within its cash (`nba-free-agency.ts`).
+  const taxCheck = nbaTaxCheck(state, clubId);
+  if (!usesEconomyBalance(state)) return taxCheck;
   const shares = new Map<boolean, number | null>();
   const rooms = new Map<number, number | null>();
   const roomFor = (year: number): number | null => {
@@ -103,6 +108,39 @@ export function automaticWageCheck(state: SeasonState, clubId: string): (seasonW
     for (let year = startsSeason; year < startsSeason + seasons; year += 1) {
       const room = roomFor(year);
       if (room !== null && seasonWage > room) return false;
+    }
+    return taxCheck(seasonWage, seasons, startsSeason);
+  };
+}
+
+/** The highest minimum salary (a veteran's). */
+const NBA_HIGHEST_MINIMUM = nbaMinimumWage(40);
+
+/**
+ * Format 103: whether a signing leaves every season's luxury tax within the club's cash (contracts, open offers and
+ * released salary with the new wage, and the minimum salaries still needed for 13). Always true outside format-103 NBA
+ * worlds.
+ */
+function nbaTaxCheck(state: SeasonState, clubId: string): (seasonWage: number, seasons: number, startsSeason: number) => boolean {
+  if (!usesNbaFreeAgency(state) || !isCapClub(state, clubId)) return () => true;
+  const squads = new Map<number, { payroll: number; size: number }>(), minimum = minRosterSize(state, clubId);
+  const squadFor = (year: number) => {
+    let squad = squads.get(year);
+    if (!squad) {
+      const summary = getClubContractSummary(state, clubId, year);
+      squad = { payroll: summary.seasonWages + summary.reservedWages + nbaDeadMoney(state.employment, clubId, year), size: summary.rosterSize + summary.reservedRosterSize };
+      squads.set(year, squad);
+    }
+    return squad;
+  };
+  return (seasonWage, seasons, startsSeason) => {
+    for (let year = startsSeason; year < startsSeason + seasons; year += 1) {
+      const { payroll, size } = squadFor(year);
+      // A minimum contract still needed for 13 players always passes; any other signing counts the cheapest minimum
+      // salaries still needed for 13 after it (an early renewal that leaves the payroll below the tax line can take it
+      // far above once the squad is filled).
+      if (size < minimum && seasonWage <= NBA_HIGHEST_MINIMUM) continue;
+      if (!nbaTaxAffordable(state, clubId, payroll + seasonWage + Math.max(0, minimum - size - 1) * NBA_LOWEST_MINIMUM, year)) return false;
     }
     return true;
   };

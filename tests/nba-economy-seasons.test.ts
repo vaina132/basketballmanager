@@ -18,7 +18,7 @@ import { centsToUsd, NBA_SALARY_CAP, nbaLuxuryTax } from '../src/world/nba-cap';
 
 /**
  * NBA step 6 (format 92): three automatic seasons of the synthetic NBA under the cap rules: every club keeps 13-15
- * players, no club runs unpaid costs, three to eight clubs pay the luxury tax each season and the tax is shared among
+ * players, no club runs unpaid costs, two to ten clubs pay the luxury tax each season and the tax is shared among
  * the others, every signing above the cap uses a legal route, and the save passes the strict check at each season end.
  */
 const play = (state: SeasonState) => advanceSeason(state.activeMatch && state.activeMatch.status !== 'finished' ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
@@ -68,12 +68,14 @@ describe('three automatic NBA seasons under the salary cap', () => {
     }
   });
 
-  it('charges the luxury tax to two to eight clubs a season and shares it among the others', () => {
+  it('charges the luxury tax to two to ten clubs a season and shares it among the others', () => {
     for (const report of reports) {
       // Format 93: NBA clubs no longer pay each other transfer fees (trades come with NBA step 9), so a season after
       // the first market can have as few as two payers (two in season 2 of this seed).
       expect(report.payers.length).toBeGreaterThanOrEqual(2);
-      expect(report.payers.length).toBeLessThanOrEqual(8);
+      // Format 103 (`nba-free-agency.ts`): clubs re-sign their stars with Bird rights past their owners' ceilings, so a
+      // season can have a few more payers (6, 9 and 6 with this seed; before, 7, 2-8).
+      expect(report.payers.length).toBeLessThanOrEqual(10);
       expect(report.shares).toBeLessThanOrEqual(report.taxTotal);
       expect(report.taxTotal - report.shares).toBeLessThan(30);
     }

@@ -9,6 +9,7 @@ import { getActiveCareerPlayers, getCareerPlayers } from './player-catalog';
 import { contractForSeason, getClubContractSummary, MIN_ROSTER_SIZE, playerContractQuoter, quotePlayerContract } from './employment-policy';
 import { commitPlayerOffer, scheduledOfferQuote } from './employment';
 import { commitContractBuyout, quoteContractBuyout } from './buyouts';
+import { NBA_FREE_AGENCY_RULES, nbaMakesRoom } from './nba-free-agency';
 import { refreshBudget, refreshesThisWindow, refreshLimit, refreshRating, releaseCandidates, SQUAD_REFRESH_RULES, usesSquadRefresh } from './squad-refresh';
 import { coachRecruitmentRating, scoutingActualAttributes, scoutingRecruitmentRating } from './scouting-policy';
 import { clubStyleFit } from './head-coaches';
@@ -23,7 +24,7 @@ import { contractAskingWage, offeredContractRole } from './contract-roles';
 import { automaticWageCheck } from './automatic-wages';
 import { paidSigningLimit, saleReplacementBudget, spendsSurplus, surplusOfferWage, surplusTransferBudget } from './surplus-spending';
 import { usesSpendingBalance } from './spending-balance';
-import { isNbaPaidPlayer, NBA_MOVES_RULES, nbaEligibilityReason, usesNbaMoves } from './nba-moves';
+import { isNbaPaidPlayer, NBA_MOVES_RULES, nbaEligibilityReason, nbaValue, usesNbaMoves } from './nba-moves';
 import { draftClassOf, draftRightsHolder, heldDraftRights, isDraftComplete } from './draft-index';
 import { overallRating } from './overall-rating';
 import { rookieContract } from './nba-draft';
@@ -354,7 +355,8 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
  * bid leaves a gap the club's ordinary recruitment fills. Unchanged state without the rule.
  */
 function refreshSquad(state: SeasonState, clubId: string, target: number, finalProposalDay: boolean): SeasonState {
-  if (finalProposalDay || !usesSquadRefresh(state) || !isCompetitiveMarket(state)) return state;
+  // Format 103: NBA clubs also make room for a clearly better free agent (`nba-free-agency.ts`).
+  if (finalProposalDay || !usesSquadRefresh(state) && !nbaMakesRoom(state, clubId) || !isCompetitiveMarket(state)) return state;
   if (addMarketDays(state.date, MARKET_RESPONSE_DAYS) > getMarketWindow(state)!.closesOn) return state;
   let next = state;
   const startsSeason = state.seasonNumber + 1;
@@ -365,7 +367,10 @@ function refreshSquad(state: SeasonState, clubId: string, target: number, finalP
     // A refresh judges players by their real skills (`refreshRating`): a computer club's scouting rarely covers free
     // agents, whose unknown ratings would otherwise all read as the neutral prior.
     const ratings = new Map<string, number>();
-    const rating = (id: string): number => { let value = ratings.get(id); if (value === undefined) { value = refreshRating(next, id); ratings.set(id, value); } return value; };
+    // Format 103: an NBA club making room judges players by their overall rating at their position (`nbaValue`), as the
+    // NBA's level is read everywhere else; the sum of skills undervalues specialists such as centres.
+    const nbaRoom = nbaMakesRoom(next, clubId), margin = nbaRoom ? NBA_FREE_AGENCY_RULES.roomMargin : SQUAD_REFRESH_RULES.margin;
+    const rating = (id: string): number => { let value = ratings.get(id); if (value === undefined) { value = nbaRoom ? nbaValue(next, id) : refreshRating(next, id); ratings.set(id, value); } return value; };
     // The wages a release still owes (every remaining guaranteed season), to release the cheaper of two equal players.
     const owed = (id: string) => next.employment.contracts.filter(contract => contract.playerId === id && contract.clubId === clubId && contract.endsSeason >= startsSeason).reduce((sum, contract) => sum + contract.seasonWage * (contract.endsSeason - Math.max(startsSeason, contract.startsSeason) + 1), 0);
     const budget = refreshBudget(next, clubId), capClub = isCapClub(next, clubId);
@@ -375,7 +380,7 @@ function refreshSquad(state: SeasonState, clubId: string, target: number, finalP
     for (const weakId of releaseCandidates(next, clubId, summary.contracts, rating, busy, owed)) {
       const release = quoteContractBuyout(next, weakId, clubId);
       if (!release.canBuyout || release.amount >= budget) continue;
-      const position = playerInList(players, weakId)!.position, bar = rating(weakId) + SQUAD_REFRESH_RULES.margin;
+      const position = playerInList(players, weakId)!.position, bar = rating(weakId) + margin;
       const fee = (id: string): { fee: number; options: ContractOfferOptions } => {
         const askingFee = requiredTransferFee(next, id), clause = getApplicableReleaseClause(next, id);
         return clause.canTrigger && clause.fee! <= askingFee ? { fee: clause.fee!, options: { transferMode: 'release-clause' } } : { fee: askingFee, options: {} };

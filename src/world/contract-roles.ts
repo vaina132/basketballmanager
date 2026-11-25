@@ -8,6 +8,7 @@ import { isCapClub } from './club-roster-policy';
 import { nbaMinimumWage } from './nba-cap';
 import { nbaLateFreeAgentMinimum } from './nba-cap-policy';
 import { nbaEuropeanDemand } from './nba-moves';
+import { cappedNbaDemand } from './nba-free-agency';
 
 /**
  * Squad roles in contracts (`relationships-3`, new careers from format 74). The role offered is part of every contract
@@ -73,7 +74,8 @@ export function contractAskingWage(context: ContractRoleContext, clubId: string,
   // Format 93: a player paid on the NBA's scale asks a European club a European wage (`nba-moves.ts`).
   const european = nbaEuropeanDemand(context, playerId, clubId, wage);
   if (european !== null) return european;
-  return isCapClub(context, clubId) ? Math.max(wage, nbaMinimumWage(context.date ? getCareerPlayerAge(context, playerId, context.date) : null)) : wage;
+  // Format 103: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
+  return isCapClub(context, clubId) ? Math.max(cappedNbaDemand(context, clubId, playerId, wage), nbaMinimumWage(context.date ? getCareerPlayerAge(context, playerId, context.date) : null)) : wage;
 }
 
 /** Why a player would refuse this role from this club, or null when he accepts it. */

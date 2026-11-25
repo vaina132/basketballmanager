@@ -15,6 +15,7 @@ import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling, isCapClub, minRosterSize, minRosterText } from './club-roster-policy';
 import { nbaDeadMoney, nbaSigningCheck } from './nba-cap-policy';
+import { NBA_BIRD_STAR_CEILING, nbaBirdStar } from './nba-free-agency';
 import { nbaEligibilityReason } from './nba-moves';
 import { usesNbaBalance } from './nba-balance';
 import type { NbaCapRoute } from './nba-cap';
@@ -377,7 +378,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       // Format 96 (NBA step 12): a signing at the player's minimum salary needed for the 13 is always allowed, under the cap
       // as over it (with the owner's ceiling as the whole wages pool, a club short of players could otherwise afford no one).
       const minimumNeeded = size <= minimumRoster && (capRoute === 'minimum' || usesNbaBalance(state) && capMinimum !== undefined && seasonWage <= capMinimum);
-      const limit = capClub() && (resolving || minimumNeeded) ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
+      const ordinary = capClub() && (resolving || minimumNeeded) ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
+      // Format 103: Bird rights keep a club's best players past its owner's ceiling (`nba-free-agency.ts`).
+      const limit = capRoute === 'bird' && nbaBirdStar(state, playerId) ? Math.max(ordinary, NBA_BIRD_STAR_CEILING) : ordinary;
       if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for ${minRosterText(state, clubId)} players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
     return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(role === undefined ? {} : { role }), ...(reason === null && capRoute ? { capRoute } : {}) };

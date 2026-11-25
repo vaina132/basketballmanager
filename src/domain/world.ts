@@ -235,6 +235,12 @@ export interface CareerWorld {
    * gains at high skill levels, earlier and faster decline, and occasional setbacks.
    */
   playerDevelopment?: true;
+  /**
+   * Format 103 (new careers in worlds with the NBA's money rules, option `nbaFreeAgency`): NBA stars are re-signed and
+   * signed as in the real league (`src/world/nba-free-agency.ts`): asks within the maximum contract, Bird rights past the
+   * owner's ceiling for stars, falling asks for unsigned players, clubs making room for them, and departures only of players nobody signs.
+   */
+  nbaFreeAgency?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

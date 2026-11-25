@@ -4,6 +4,7 @@ import type { WorldContext } from '../domain/world';
 import { dateForRound } from './season';
 import { seasonRounds } from './career-world';
 import { RELATIONSHIP_RULES } from './relationship-rules';
+import { cappedNbaDemand } from './nba-free-agency';
 
 export type ContractRequestEvent = Extract<RelationshipEvent, { type: 'contract-request' }>;
 export type ContractReplyEvent = Extract<RelationshipEvent, { type: 'contract-reply' }>;
@@ -138,5 +139,6 @@ export function refusedContractPremium(context: ContractRequestContext, clubId: 
 /** The lowest annual wage this club can offer a player who remembers a refusal, in the wage steps contracts use. */
 export function refusedContractMinimum(context: ContractRequestContext, clubId: string, playerId: string, askingWage: number, wageStep: number): number {
   const premium = refusedContractPremium(context, clubId, playerId);
-  return premium ? Math.ceil(askingWage * (100 + premium) / (100 * wageStep)) * wageStep : 0;
+  // Format 103: never more than the player's maximum NBA contract.
+  return premium ? cappedNbaDemand(context, clubId, playerId, Math.ceil(askingWage * (100 + premium) / (100 * wageStep)) * wageStep) : 0;
 }

@@ -8,6 +8,8 @@ import { clubContractsForRound, contractForRound, effectiveContractsForRound, MA
 import { addMarketDays, getMarketWindow, MARKET_WINDOW_DAYS } from './market-policy';
 import { NBA_CAP_RULES, NBA_SALARY_CAP, usdToCents } from './nba-cap';
 import { nbaDeadMoney } from './nba-cap-policy';
+import { nbaOwnerCeiling } from './nba-owner';
+import { usesNbaFreeAgency } from './nba-free-agency';
 import { overallRating } from './overall-rating';
 import { getCareerPlayer, getCareerPlayerAge, type CareerPlayerContext } from './player-catalog';
 import { dateForRound } from './season';
@@ -305,6 +307,22 @@ function quickTradeFits(values: ValueContext, first: TradeSide, second: TradeSid
   });
 }
 
+/**
+ * Format 103 (`nba-free-agency.ts`): a computer club takes on no salary in a trade above its owner's payroll ceiling
+ * (or above its payroll before the trade, when that is already higher): with stars now re-signed, trades had taken
+ * small-market clubs far into the luxury tax and into unpaid costs. Read from the world and the contracts only, so save
+ * checks plan the same trades.
+ */
+function ownerAllows(values: ValueContext, first: TradeSide, second: TradeSide): boolean {
+  if (!usesNbaFreeAgency(values.context)) return true;
+  const sides = [first, second] as const;
+  return sides.every((side, index) => {
+    const other = sides[1 - index]!, club = values.clubs.get(side.clubId)!;
+    const after = club.payroll - side.playerIds.reduce((sum, id) => sum + values.players.get(id)!.wage, 0) + other.playerIds.reduce((sum, id) => sum + values.players.get(id)!.wage, 0);
+    return after <= Math.max(club.payroll, nbaOwnerCeiling(values.context.world!, side.clubId));
+  });
+}
+
 export interface TradeAnswer { accept: boolean; reason: string | null; gain: number | null }
 
 /**
@@ -370,7 +388,7 @@ function findTrade(context: TradeContext, values: ValueContext, view: TradeView,
         if (receives.length > 1 && sends.length > 1) continue;
         if (tradeGain(values, initiator, sends, receives) < margin(initiator) || tradeGain(values, partner, receives, sends) < margin(partner)) continue;
         const first = { clubId: initiator, playerIds: sends }, other = { clubId: partner, playerIds: receives };
-        if (quickTradeFits(values, first, other) && !checkTrade(context, view, first, other).reason) return { first, second: other };
+        if (quickTradeFits(values, first, other) && ownerAllows(values, first, other) && !checkTrade(context, view, first, other).reason) return { first, second: other };
       }
     }
   }

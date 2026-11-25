@@ -3,7 +3,7 @@ import type { CareerWorld } from '../domain/world';
 import { OVR_POSITION_WEIGHTS, overallRating } from './overall-rating';
 
 /**
- * Format 105 (new real-data careers, marker `world.positionProfiles`): generated players are shaped like real players
+ * Format 106 (new real-data careers, marker `world.positionProfiles`): generated players are shaped like real players
  * of their position and rating.
  *
  * Ten automatic seasons had shown the three-point share of shots in Liga ACB and the Süper Ligi rising from about 43%
@@ -51,7 +51,7 @@ export type ProfileRegion = keyof typeof POSITION_PROFILES;
 const SKILLS = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 const clampSkill = (value: number) => Math.max(1, Math.min(20, value));
 
-/** Whether the career's world shapes its generated players by position (format 105; pass `worldOf(state)`). */
+/** Whether the career's world shapes its generated players by position (format 106; pass `worldOf(state)`). */
 export function usesPositionProfiles(world: Pick<CareerWorld, 'positionProfiles'>): boolean {
   return world.positionProfiles === true;
 }
@@ -128,7 +128,7 @@ export function profiledAttributesFor(target: number, position: Position, region
 }
 
 /**
- * Format 105, development: a balanced week's practice goes to each skill as real players of the position differ in it
+ * Format 106, development: a balanced week's practice goes to each skill as real players of the position differ in it
  * between the lowest and the highest rating band (`growthShares`), so practice makes a centre a better centre rather
  * than a shooter. Each skill keeps at least `minSlope` skill points per rating point, so every skill still grows a
  * little. A focus week still trains its one skill.

@@ -204,7 +204,7 @@ export function processTrainingWeek(given: TrainingWeekInput): { training: Seaso
   // A short interval (after a midweek game day) counts as a whole week of learning, so growth depends on age, not on the
   // calendar; a skill never gains more in an interval than a full week's practice would give it.
   const dayScale = developing ? 7 / dates.length : 1;
-  // Format 105 (`world.positionProfiles`): a balanced week follows how real players of the position develop.
+  // Format 106 (`world.positionProfiles`): a balanced week follows how real players of the position develop.
   const shapedGrowth = developing && usesPositionProfiles(worldOf(input));
   for (const club of clubs) {
     const registered = rosterForRound(rosters, club.id, afterRound);

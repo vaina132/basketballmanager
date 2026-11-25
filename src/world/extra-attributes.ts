@@ -117,7 +117,7 @@ export function storesExtraAttributes(world: { clubs: readonly { players: readon
 
 /**
  * New academy and youth-squad prospects of a world that stores the five get them by the same rules (no recorded minutes).
- * `averageExperience` (format 105, `world.positionProfiles`): the experience the rules assume for a player whose minutes
+ * `averageExperience` (format 106, `world.positionProfiles`): the experience the rules assume for a player whose minutes
  * are unknown, as real players have it, so leagues that generated players fill keep their decisions and composure.
  */
 export function prospectsWithExtras<T extends { player: Player; dateOfBirth: string }>(world: Parameters<typeof storesExtraAttributes>[0], prospects: readonly T[], onDate: string, averageExperience = false): T[] {

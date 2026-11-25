@@ -114,7 +114,8 @@ describe('European entry in a career (format 83)', () => {
     expect(roundTrip(next)).toEqual(next);
     const changed = (change, pattern) => { const copy = structuredClone(next); change(copy); expect(() => parseSeason(currentSeasonFile(copy))).toThrow(pattern); };
     changed(copy => { delete copy.history[0].europe.answers; }, /europe/);
-    changed(copy => { copy.europe.decision.lost = []; }, /europe/);
+    // Which clubs lost a place depends on the seeded seasons; the tamper either empties the list or adds a loss.
+    changed(copy => { copy.europe.decision.lost = copy.europe.decision.lost.length ? [] : [{ clubId: world.clubs[6].id, competitionId: 'euroleague', reason: 'relegated' }]; }, /europe/);
     changed(copy => { copy.europe.decision.chosen = ['nobody']; }, /europe/);
     changed(copy => { copy.europe.held = [...copy.europe.held, { clubId: world.clubs[5].id, competitionId: 'eurocup', type: 'licence', until: null, reason: 'relegated' }]; }, /europe/);
   }, 300_000);

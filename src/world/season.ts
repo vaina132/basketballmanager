@@ -12,6 +12,7 @@ import { createRivalries, enableRivalries } from './rivalries';
 import { createGrownRivalries, growRivalries } from './rivalry-growth';
 import { computeEconomySeasons, createEconomySeasons, growEconomy, withCashBalanceNbaRevenue, type EconomyForesight } from './economy';
 import { euroleagueJobsWorld } from './euroleague-jobs';
+import { withGeneratedPeople } from './generated-people';
 import { appointFromUnemployment, appointManager, createCareer, enableCareerMoves, lastManagedClub, leaveClub, matchClubFor, restartBoard, transferManager, currentMovePhase } from './career';
 import { jobOfferRefusal, jobRefusal, midSeasonChanges, resignationOutlook, resignationRefusal, seasonEndOutlook, unemployedSeasonEndVacancies, type MidSeasonChanges, type SeasonEndOutlook } from './career-policy';
 import { allowsUnemployment, CAREER_RULES, coachProtected, isUnemployed, NO_CLUB, startingConfidence, usesCareerRules } from './career-rules';
@@ -21,6 +22,7 @@ import { addCalendarDays, domesticRoundDates, roundRobinGames, roundRobinRoundCo
 import { derivePostseason, POSTSEASON_FORMATS, POSTSEASON_SLOT_OFFSETS, postseasonOutcome } from './postseason';
 import { divisionChanges, openingDivisions, seasonLeagues } from './divisions';
 import { createBackground } from './background';
+import { backgroundSquadClubIds } from './background-squads';
 import { backgroundConditions, backgroundMatchdayTeam, backgroundPlan, backgroundRosterId, backgroundSide, europeanRegularFixtures, getEuropeanCompetitions, playsEurope } from './europe';
 import type { ClubExchange } from '../domain/background';
 import { computeExchanges, departureFor, joinedContracts, leavingRecord } from './exchanges';
@@ -660,18 +662,18 @@ export interface SeasonSystems {
    */
   careerBalance?: boolean;
   /**
-   * Format 99 (owner decision 24 November 2026, provisional number): cash no longer piles up, in worlds with researched club money
+   * Format 99 (owner decision 24 November 2026): cash no longer piles up, in worlds with researched club money
    * (`world.cashBalance`, `src/world/cash-balance.ts`). New careers only.
    */
   cashBalance?: boolean;
   /**
-   * Format 100 (owner decision 24 November 2026, provisional number): clubs in that season's EuroLeague are bigger jobs
+   * Format 100 (owner decision 24 November 2026): clubs in that season's EuroLeague are bigger jobs
    * than other top-division clubs in worlds without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`).
    * New careers only.
    */
   euroleagueJobs?: boolean;
   /**
-   * Format 102 (owner decision 24 November 2026, provisional number): rich clubs with a full squad refresh it, releasing
+   * Format 102 (owner decision 24 November 2026): rich clubs with a full squad refresh it, releasing
    * a weak player to sign a clearly better one (`world.squadRefresh`, `src/world/squad-refresh.ts`). New careers with
    * the spending balance only.
    */
@@ -682,7 +684,25 @@ export interface SeasonSystems {
    */
   playerDevelopment?: boolean;
   /**
-   * Format 105 (provisional number): generated players (academy and youth prospects, NBA draft prospects) are shaped
+   * Format 103: the manager's pending offers that no longer fit his club's wage budget when the
+   * player answers are withdrawn, with an Inbox message (`world.managerOfferWithdrawal`, `src/world/offer-withdrawals.ts`).
+   * New careers with the spending balance only.
+   */
+  managerOfferWithdrawal?: boolean;
+  /**
+   * Format 104 (owner request 24 November 2026): background clubs' squads develop, age, retire and
+   * are renewed at each season change (`world.backgroundSquads`, `src/world/background-squads.ts`). New careers with
+   * player development only.
+   */
+  backgroundSquads?: boolean;
+  /**
+   * Format 105 (owner data check 24 November 2026): generated people have a nationality, mostly the
+   * club's country, and names from much larger lists, never used twice in the world (`world.generatedPeople`,
+   * `src/world/generated-people.ts`). New real-club careers only.
+   */
+  generatedPeople?: boolean;
+  /**
+   * Format 106 (provisional number): generated players (academy and youth prospects, NBA draft prospects) are shaped
    * like real players of their position (`world.positionProfiles`, `src/world/position-profiles.ts`). New real-data
    * careers only.
    */
@@ -700,7 +720,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, positionProfiles: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, managerOfferWithdrawal: true, backgroundSquads: true, generatedPeople: true, positionProfiles: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -746,6 +766,9 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.euroleagueJobs !== undefined && typeof options.euroleagueJobs !== 'boolean') throw new Error('Choose a valid EuroLeague jobs setting.');
   if (options.squadRefresh !== undefined && typeof options.squadRefresh !== 'boolean') throw new Error('Choose a valid squad refresh setting.');
   if (options.playerDevelopment !== undefined && typeof options.playerDevelopment !== 'boolean') throw new Error('Choose a valid player development setting.');
+  if (options.managerOfferWithdrawal !== undefined && typeof options.managerOfferWithdrawal !== 'boolean') throw new Error('Choose a valid offer withdrawal setting.');
+  if (options.backgroundSquads !== undefined && typeof options.backgroundSquads !== 'boolean') throw new Error('Choose a valid background squads setting.');
+  if (options.generatedPeople !== undefined && typeof options.generatedPeople !== 'boolean') throw new Error('Choose a valid generated people setting.');
   if (options.positionProfiles !== undefined && typeof options.positionProfiles !== 'boolean') throw new Error('Choose a valid position profiles setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
@@ -819,7 +842,13 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   if (options.squadRefresh && !world.squadRefresh && (spendingBalance || world.spendingBalance)) world = { ...world, squadRefresh: true as const };
   // Format 101: realistic player development, in every real-data world.
   if (options.playerDevelopment && !world.playerDevelopment) world = { ...world, playerDevelopment: true as const };
-  // Format 105: generated players shaped by position, in real-data worlds (with domestic leagues) only.
+  // Format 103: the manager's offers that no longer fit are withdrawn before the reply, with the spending balance only.
+  if (options.managerOfferWithdrawal && !world.managerOfferWithdrawal && (spendingBalance || world.spendingBalance)) world = { ...world, managerOfferWithdrawal: true as const };
+  // Format 104: background clubs' squads change at season changes, with player development, in worlds with background clubs.
+  if (options.backgroundSquads && !world.backgroundSquads && world.playerDevelopment && backgroundSquadClubIds(world).size) world = { ...world, backgroundSquads: true as const };
+  // Format 105: generated people named again with nationalities, in real-club worlds (with domestic leagues) only.
+  if (options.generatedPeople && !world.generatedPeople && world.domesticLeagues) world = withGeneratedPeople(world);
+  // Format 106: generated players shaped by position, in real-data worlds (with domestic leagues) only.
   if (options.positionProfiles && !world.positionProfiles && world.domesticLeagues) world = { ...world, positionProfiles: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }

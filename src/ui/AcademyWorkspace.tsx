@@ -26,7 +26,9 @@ import { scoutingDate } from './ScoutingKnowledge'
 import './academy-workspace.css'
 import { seasonRounds } from '../world/career-world'
 import { YOUTH_COACH_DIRECTORY } from '../data/staff-directory'
-import { formatMoney } from './money-format'
+import { currencySymbol, formatMoney, meetsMoneyRule, moneyRuleText } from './money-format'
+import { MoneyInEuros, MoneyInput } from './MoneyInput'
+import { useDisplayCurrency } from './use-currency'
 
 export interface AcademyWorkspaceProps {
   season: SeasonState
@@ -57,14 +59,15 @@ function AcademyReadiness({ season, row }: { season: SeasonState; row: AcademyPl
 }
 
 function PromotionReview({ season, row, busy, onOffer, onWithdraw, onClose }: { season: SeasonState; row: AcademyPlayerView; busy: boolean; onOffer: AcademyWorkspaceProps['onPromoteAcademy']; onWithdraw: AcademyWorkspaceProps['onWithdrawPromotion']; onClose: () => void }) {
-  const [wage, setWage] = useState(String(row.pendingOffer?.seasonWage ?? requiredNegotiationWage(row.player.id, 1, undefined, season)))
+  // The salary in euro cents, typed in the viewer's currency (owner, 24 November 2026).
+  const [amount, setAmount] = useState(row.pendingOffer?.seasonWage ?? requiredNegotiationWage(row.player.id, 1, undefined, season))
+  const currency = useDisplayCurrency()
   const region = useRef<HTMLElement>(null)
-  const amount = Number(wage)
   const quote = quoteAcademyPromotion(season, row.player.id, amount)
   const unchanged = row.pendingOffer?.seasonWage === amount
   const latest = [...season.recruitment.offers].reverse().find(offer => offer.academyProspectId === row.player.id && offer.clubId === season.managedClubId)
-  const validWage = wage !== '' && Number.isInteger(amount) && amount >= MIN_CONTRACT_WAGE && amount <= maxContractWage(season) && amount % WAGE_STEP === 0
-  const reason = !validWage ? (season.world?.economy ? `Choose an annual salary from €5,000 to ${money(maxContractWage(season))}, in €500 steps.` : 'Choose an annual salary from €5,000 to €50,000, in €500 steps.') : quote.reason
+  const validWage = meetsMoneyRule(amount, MIN_CONTRACT_WAGE, maxContractWage(season), WAGE_STEP)
+  const reason = !validWage ? currency === 'USD' ? moneyRuleText('an annual salary', MIN_CONTRACT_WAGE, maxContractWage(season), WAGE_STEP, currency) : (season.world?.economy ? `Choose an annual salary from €5,000 to ${money(maxContractWage(season))}, in €500 steps.` : 'Choose an annual salary from €5,000 to €50,000, in €500 steps.') : quote.reason
   const academyAfter = getClubAcademy(season).filter(item => item.player.id !== row.player.id)
   const availableAfter = academyAfter.filter(item => getYouthPlayerStatus(season, item.player.id).available).length
   const otherPending = academyAfter.filter(item => item.pendingOffer).length
@@ -73,7 +76,7 @@ function PromotionReview({ season, row, busy, onOffer, onWithdraw, onClose }: { 
   useEffect(() => { region.current?.focus({ preventScroll: true }); region.current?.scrollIntoView({ block: 'nearest' }) }, [])
   return <section className="academy-promotion panel" ref={region} tabIndex={-1} aria-labelledby="academy-promotion-title" onKeyDown={event => { if (event.key === 'Escape' && !busy) { event.preventDefault(); onClose() } }}>
     <header className="academy-heading"><div><h2 id="academy-promotion-title">Offer a senior contract</h2><span>{row.player.name} &middot; remainder of this season</span></div><button className="text-button" onClick={onClose} disabled={busy}><Icon name="close" size={14} />Close</button></header>
-    <div className="academy-promotion-body"><div className="academy-promotion-terms"><label htmlFor="academy-promotion-wage">Annual salary <strong>{validWage ? money(amount) : 'Enter salary'}</strong></label><input id="academy-promotion-wage" type="range" min={MIN_CONTRACT_WAGE} max={maxContractWage(season)} step={WAGE_STEP} value={validWage ? amount : MIN_CONTRACT_WAGE} onChange={event => setWage(event.target.value)} disabled={busy} /><label className="academy-wage-input">Exact annual salary (€)<input id="academy-promotion-wage-number" type="number" min={MIN_CONTRACT_WAGE / 100} max={maxContractWage(season) / 100} step={WAGE_STEP / 100} value={wage === '' ? '' : amount / 100} onChange={event => setWage(event.target.value === '' ? '' : String(Number(event.target.value) * 100))} disabled={busy} /></label><small>Opening demand: {money(requiredNegotiationWage(row.player.id, 1, undefined, season))} / year</small></div>
+    <div className="academy-promotion-body"><div className="academy-promotion-terms"><label htmlFor="academy-promotion-wage">Annual salary <strong>{validWage ? money(amount) : 'Enter salary'}</strong></label><input id="academy-promotion-wage" type="range" min={MIN_CONTRACT_WAGE} max={maxContractWage(season)} step={WAGE_STEP} value={validWage ? amount : MIN_CONTRACT_WAGE} onChange={event => setAmount(Number(event.target.value))} disabled={busy} /><label className="academy-wage-input">Exact annual salary ({currencySymbol(currency)})<MoneyInput id="academy-promotion-wage-number" minCents={MIN_CONTRACT_WAGE} maxCents={maxContractWage(season)} stepCents={WAGE_STEP} cents={amount} onCents={setAmount} showEuros={false} disabled={busy} /></label><MoneyInEuros cents={amount} /><small>Opening demand: {money(requiredNegotiationWage(row.player.id, 1, undefined, season))} / year</small></div>
       <div className="academy-promotion-facts"><div><span>Reply &amp; joining date</span><strong>{season.status === 'active' && season.round < seasonRounds(season) ? scoutingDate(quote.responseOn) : 'Window closed'}</strong></div><div><span>Salary cost for remaining season</span><strong data-promotion-cost={quote.remainingWages}>{validWage ? money(quote.remainingWages) : '—'}</strong></div><div><span>Senior squad after signing</span><strong>{quote.rosterSize} / {clubRosterLimit(season)}</strong></div><details><summary>Budget after this offer</summary><dl><div><dt>Spending left</dt><dd>{validWage ? money(quote.remainingBudgetAfter) : '—'}</dd></div><div><dt>Wages left this season / year</dt><dd>{validWage ? money(quote.annualBudgetRemaining) : '—'}</dd></div></dl><p>Remaining salary costs and a senior squad place are held until the reply. The current match stays unchanged. No transfer fee.</p></details></div>
     </div>
     {row.pendingOffer ? <div className="academy-promotion-status" role="status"><Icon name="clock" size={17} /><span>Awaiting reply on {scoutingDate(row.pendingOffer.responseOn)}. The player remains in the academy until he signs.</span><button id="academy-withdraw-promotion" className="text-button" onClick={() => onWithdraw(row.pendingOffer!.id)} disabled={busy}>Withdraw offer</button></div> : latest && latest.status !== 'accepted' && <p className="academy-promotion-status" role="status">{latest.status === 'countered' ? 'Player counteroffer' : latest.status === 'withdrawn' ? 'Offer withdrawn' : latest.status === 'cancelled' ? 'Offer cancelled' : 'Previous offer closed'}{latest.reason ? ` · ${latest.reason}` : ''}. Still in the academy.</p>}

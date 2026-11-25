@@ -106,6 +106,11 @@ const developmentLoss = memoizePure((key: string): TrainingPoints => {
   return loss;
 });
 
+/** Format 104 (`background-squads.ts`): a player's decline and setbacks between two dates with a known birth date, hundredths per skill. */
+export function developmentLossBetween(seed: number, playerId: string, dateOfBirth: string, startedOn: string, until: string): TrainingPoints {
+  return developmentLoss(`${seed}|${playerId}|${dateOfBirth}|${startedOn}|${until}`);
+}
+
 /** Smooth age curves affect real practice only, expressed in integer basis points. */
 export function ageTrainingRate(context: LifecycleContext, playerId: string, onDate: string): number {
   const dateOfBirth = lifecycleDateOfBirth(context, playerId);
@@ -159,7 +164,12 @@ function agedExtras(context: LifecycleContext, playerId: string, attributes: Ext
   const dateOfBirth = lifecycleDateOfBirth(context, playerId), startedOn = agingStart(context, playerId, onDate);
   if (!dateOfBirth || !startedOn) return Object.fromEntries(EXTRA_ATTRIBUTES.map(key => [key, attributes[key]])) as unknown as ExtraAttributes;
   const retirement = getPlayerRetirement(context, playerId, onDate);
-  const until = dateNumber(retirement.status === 'retired' ? retirement.notice!.retiredOn : onDate), start = dateNumber(startedOn);
+  return agedExtrasBetween(attributes, dateOfBirth, startedOn, retirement.status === 'retired' ? retirement.notice!.retiredOn : onDate);
+}
+
+/** Format 104 (`background-squads.ts`): the five further abilities aged from a start date to a date, for a known birth date. */
+export function agedExtrasBetween(attributes: ExtraAttributes, dateOfBirth: string, startedOn: string, onDate: string): ExtraAttributes {
+  const until = dateNumber(onDate), start = dateNumber(startedOn);
   const daysBetween = (from: number, to: number) => Math.max(0, Math.round((Math.min(to, until) - Math.max(from, start)) / DAY_MS));
   return Object.fromEntries(EXTRA_ATTRIBUTES.map(key => {
     const rule = EXTRA_AGING[key];

@@ -20,7 +20,7 @@ import type { SeasonTraining } from '../src/domain/training';
 import type { CareerWorld } from '../src/domain/world';
 
 /**
- * Format 105 (`world.positionProfiles`): generated players (academy and youth prospects, NBA draft prospects) are shaped
+ * Format 106 (`world.positionProfiles`): generated players (academy and youth prospects, NBA draft prospects) are shaped
  * like real players of their position and rating. Ten automatic seasons had shown the three-point share rising 6-7
  * points in Liga ACB and the Süper Ligi and NBA free-throw percentage 3 points: generated players with flat skills had
  * replaced the retiring real players (centres who shot threes and free throws like forwards). Older careers keep the
@@ -32,11 +32,11 @@ const POSITIONS: readonly Position[] = ['PG', 'SG', 'SF', 'PF', 'C'];
 const SKILLS = ['twoPoint', 'threePoint', 'freeThrow', 'passing', 'defense', 'rebounding', 'stamina'] as const;
 const mean = (values: readonly number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 const byPosition = (players: readonly Pick<Player, 'position' | 'attributes'>[], position: Position, key: keyof SkillAttributes | 'overall') => mean(players.filter(player => player.position === position).map(player => key === 'overall' ? overallRating(player.attributes, position) : player.attributes[key]));
-const academyPlayers = (profiles: boolean) => Array.from({ length: 60 }, (_, seed) => [1, 2, 3, 4, 5].flatMap(season => generateAcademyProspects(seed + 1, `club-${seed + 1}`, season, 1, true, 3, profiles).map(prospect => prospect.player))).flat();
-const draftPlayers = (profiles: boolean) => Array.from({ length: 12 }, (_, seed) => draftClassProspects(seed + 1, 2, '2027-06-25', true, profiles).map(prospect => prospect.player)).flat();
+const academyPlayers = (profiles: boolean) => Array.from({ length: 60 }, (_, seed) => [1, 2, 3, 4, 5].flatMap(season => generateAcademyProspects(seed + 1, `club-${seed + 1}`, season, 1, true, 3, undefined, profiles).map(prospect => prospect.player))).flat();
+const draftPlayers = (profiles: boolean) => Array.from({ length: 12 }, (_, seed) => draftClassProspects(seed + 1, 2, '2027-06-25', true, profiles ? { positionProfiles: true } as CareerWorld : undefined).map(prospect => prospect.player)).flat();
 
-describe('the position profiles marker (format 105)', () => {
-  it('marks new real-data careers only, and format 104 refuses the marker', () => {
+describe('the position profiles marker (format 106)', () => {
+  it('marks new real-data careers only, and format 105 refuses the marker', () => {
     const state = createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS });
     expect(state.world!.positionProfiles).toBe(true);
     expect(usesPositionProfiles(state.world!)).toBe(true);
@@ -46,10 +46,10 @@ describe('the position profiles marker (format 105)', () => {
     expect(() => createSeason({ seed: 5, world: packWorld, positionProfiles: 'yes' as unknown as boolean })).toThrow(/position profiles setting/);
     expect(parseSeason(serializeSeason(state)).world!.positionProfiles).toBe(true);
     const envelope = JSON.parse(serializeSeason(state));
-    envelope.formatVersion = 104; envelope.state.schemaVersion = 104;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/positionProfiles.*format 105/);
+    envelope.formatVersion = 105; envelope.state.schemaVersion = 105;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/positionProfiles.*format 106/);
     const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS, positionProfiles: false })));
-    older.formatVersion = 104; older.state.schemaVersion = 104;
+    older.formatVersion = 105; older.state.schemaVersion = 105;
     expect(parseSeason(JSON.stringify(older)).world!.positionProfiles).toBeUndefined();
     expect(() => validateWorld({ ...packWorld, positionProfiles: 'yes' })).toThrow(/positionProfiles/);
     const { domesticLeagues: _leagues, ...withoutLeagues } = packWorld;
@@ -94,7 +94,7 @@ describe('academy and youth prospects', () => {
     // Same identities, positions, ages and wages: only the skills change.
     const strip = (players: readonly Player[]) => players.map(({ attributes: _attributes, ...rest }) => rest);
     expect(strip(shaped)).toEqual(strip(flat));
-    const youth = generateYouthSquadProspects(7, 'club-7', 2, 1, [], 8, true), youthFlat = generateYouthSquadProspects(7, 'club-7', 2, 1, [], 8);
+    const youth = generateYouthSquadProspects(7, 'club-7', 2, 1, [], 8, undefined, true), youthFlat = generateYouthSquadProspects(7, 'club-7', 2, 1, [], 8);
     expect(youth.map(prospect => prospect.player.id)).toEqual(youthFlat.map(prospect => prospect.player.id));
     expect(youth.some((prospect, index) => SKILLS.some(key => prospect.player.attributes[key] !== youthFlat[index]!.player.attributes[key]))).toBe(true);
   });
@@ -106,7 +106,7 @@ describe('NBA draft prospects', () => {
   it('keep their target ratings and identities, and older careers keep the earlier class', () => {
     expect(shaped.map(player => player.id)).toEqual(flat.map(player => player.id));
     for (const [index, player] of shaped.entries()) expect(Math.abs(overallRating(player.attributes, player.position) - overallRating(flat[index]!.attributes, player.position))).toBeLessThanOrEqual(1);
-    expect(draftClassProspects(3, 2, '2027-06-25', true)).toBe(draftClassProspects(3, 2, '2027-06-25', true, false));
+    expect(draftClassProspects(3, 2, '2027-06-25', true)).toBe(draftClassProspects(3, 2, '2027-06-25', true, {} as CareerWorld));
   });
 
   it('carry the experience the rules assume for unknown minutes, as real players do', () => {

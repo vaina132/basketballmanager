@@ -2125,7 +2125,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
       // Format 72: the budget known at signing; format 70: the highest budget a board verdict could allow.
       // Format 92: an NBA club's minimum contracts it needs for its 13 players fit whatever its owner's ceiling (as the guard allows).
       if (entry.capRoute === 'minimum' && annual.length <= minRosterSize(context, entry.clubId as string)) { if (annual.length > clubRosterLimit(context, entry.clubId as string)) fail(path, 'must fit the club\'s squad limit'); continue; }
-      // Format 103: Bird rights keep a club's stars past its owner's ceiling, up to the first apron (the guard checks the rating).
+      // Format 103: Bird rights keep a club's stars past its owner's ceiling, up to the tax line (the guard checks the rating).
       const birdStar = entry.capRoute === 'bird' && usesNbaFreeAgency(context) ? NBA_BIRD_STAR_CEILING : 0;
       if (annual.length > clubRosterLimit(context, entry.clubId as string) || wages + Math.max(0, MIN_ROSTER_SIZE - annual.length) * lowestMinimumSquadWage(context, entry.clubId as string, year) > Math.max(birdStar, Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year)) + pooledStaffRoom(entry.clubId as string, year) + surplusRoom(Math.max(clubSalaryBudget(context, entry.clubId as string, year, signedSeason), seasonSalaryCeiling(context, entry.clubId as string, year))))) fail(path, 'exceeds the roster limit or annual wage allocation including minimum-squad reserves');
     }

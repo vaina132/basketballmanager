@@ -15,7 +15,7 @@ import { retirementContractReason } from './lifecycle-policy';
 import type { WorldContext } from '../domain/world';
 import { clubRosterLimitText, clubRosterLimit, clubSalaryCeiling, isCapClub, minRosterSize, minRosterText } from './club-roster-policy';
 import { nbaDeadMoney, nbaSigningCheck } from './nba-cap-policy';
-import { NBA_BIRD_STAR_CEILING, nbaBirdStar } from './nba-free-agency';
+import { NBA_BIRD_STAR_CEILING, nbaBirdStar, usesNbaFreeAgency } from './nba-free-agency';
 import { nbaEligibilityReason } from './nba-moves';
 import { usesNbaBalance } from './nba-balance';
 import type { NbaCapRoute } from './nba-cap';
@@ -381,7 +381,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       const ordinary = capClub() && (resolving || minimumNeeded) ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
       // Format 103: Bird rights keep a club's best players past its owner's ceiling (`nba-free-agency.ts`).
       const limit = capRoute === 'bird' && nbaBirdStar(state, playerId) ? Math.max(ordinary, NBA_BIRD_STAR_CEILING) : ordinary;
-      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for ${minRosterText(state, clubId)} players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
+      // Format 103: released salary (dead money) counts against an NBA club's wage budget, as it counts for the tax.
+      const released = capClub() && usesNbaFreeAgency(state) ? nbaDeadMoney(state.employment, clubId, year) : 0;
+      if (summary.seasonWages + summary.reservedWages + seasonWage + reserve + released > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for ${minRosterText(state, clubId)} players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }
     return { playerId, clubId, startsSeason, endsSeason, seasons, seasonWage, askingWage, canOffer: reason === null, reason, ...(options.releaseFee === undefined ? {} : { releaseFee: options.releaseFee }), ...(role === undefined ? {} : { role }), ...(reason === null && capRoute ? { capRoute } : {}) };
   };

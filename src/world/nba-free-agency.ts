@@ -32,7 +32,8 @@ import { nbaValue } from './nba-moves';
  * - **Asks within the maximum.** A player never asks an NBA club more than his maximum contract at his age (every
  *   demand: one season or longer, after a refused request, the club's role premium).
  * - **Bird rights for stars.** Re-signing the club's own player rated `birdStarLevel` or more (Bird rights) may take the
- *   payroll past the owner's payroll ceiling up to the first apron (owners pay some tax to keep their stars).
+ *   payroll past the owner's payroll ceiling up to the tax line (an owner who stays below the tax keeps his stars without
+ *   paying it; owners who accept the tax already have ceilings above the line).
  * - **The tax within the club's cash.** A club run automatically signs no one whose salary would leave a luxury tax
  *   bill above its cash (with the current season's bill still due; except the players it needs for 13), and takes on no
  *   salary above its owner's ceiling in a trade, so small-market clubs do not run up unpaid costs.
@@ -40,6 +41,8 @@ import { nbaValue } from './nba-moves';
  *   than his own at most the non-taxpayer mid-level exception (every club over the cap can sign him once; his own club
  *   keeps his Bird rights at his full ask), and from `minimumAfterDays` days into the window his minimum salary (the
  *   veteran minimum; format 92 waited for the last seven days, after most offseasons had already ended).
+ * - **Released salary counts.** An NBA club's wage budget check counts the salary of players it released (dead money),
+ *   as the tax does, so making room cannot carry a club past its owner's ceiling.
  * - **Clubs make room.** An NBA club run automatically with a full squad may release one of its weakest players a
  *   window (`roomPerWindow`; the format-102 refresh, judged by overall rating: a free agent of the same position at least
  *   `roomMargin` better than him, the
@@ -54,8 +57,11 @@ export const NBA_FREE_AGENCY_RULES = Object.freeze({
   model: 'nba-free-agency-1' as const,
   /** [E] Own players at this overall or above may be re-signed past the owner's ceiling (about a club's best one or two). */
   birdStarLevel: 85,
-  /** [S] The payroll re-signing such a player may reach: the 2026-27 first apron (the second apron let taxpayers climb to 20 a season). */
-  birdStarCeilingUsd: NBA_CAP_2026_27.firstApronUsd,
+  /**
+   * [S] The payroll re-signing such a player may reach: the 2026-27 tax line. Measured (live pack, NBA alone, seed 7):
+   * up to the first or second apron, 13-20 of 30 clubs paid the tax in seasons 2-5 (the real league: 7-9).
+   */
+  birdStarCeilingUsd: NBA_CAP_2026_27.taxLevelUsd,
   /** [E] Days into the offseason window from which a free agent asks other clubs only his minimum salary. */
   minimumAfterDays: 3,
   /** [E] Releases a club makes in one window to sign a clearly better free agent. */
@@ -83,7 +89,7 @@ export const NBA_RELEASE_ALLOWANCE = usdToCents(NBA_FREE_AGENCY_RULES.releaseAll
 export const nbaMakesRoom = (context: WorldContext, clubId: string): boolean => usesNbaFreeAgency(context) && isCapClub(context, clubId);
 
 /** The payroll (euro cents) a club may reach re-signing one of its stars with Bird rights. */
-export const NBA_BIRD_STAR_CEILING = usdToCents(NBA_FREE_AGENCY_RULES.birdStarCeilingUsd);
+export const NBA_BIRD_STAR_CEILING = Math.floor(usdToCents(NBA_FREE_AGENCY_RULES.birdStarCeilingUsd) / 1_000_000) * 1_000_000;
 
 /**
  * Format 103: whether a club run automatically can pay from its cash the luxury tax a payroll (euro cents) for

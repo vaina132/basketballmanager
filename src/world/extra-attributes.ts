@@ -115,12 +115,16 @@ export function storesExtraAttributes(world: { clubs: readonly { players: readon
   return known;
 }
 
-/** New academy and youth-squad prospects of a world that stores the five get them by the same rules (no recorded minutes). */
-export function prospectsWithExtras<T extends { player: Player; dateOfBirth: string }>(world: Parameters<typeof storesExtraAttributes>[0], prospects: readonly T[], onDate: string): T[] {
+/**
+ * New academy and youth-squad prospects of a world that stores the five get them by the same rules (no recorded minutes).
+ * `averageExperience` (format 105, `world.positionProfiles`): the experience the rules assume for a player whose minutes
+ * are unknown, as real players have it, so leagues that generated players fill keep their decisions and composure.
+ */
+export function prospectsWithExtras<T extends { player: Player; dateOfBirth: string }>(world: Parameters<typeof storesExtraAttributes>[0], prospects: readonly T[], onDate: string, averageExperience = false): T[] {
   if (!storesExtraAttributes(world)) return [...prospects];
   return prospects.map(prospect => {
     const birth = prospect.dateOfBirth, age = Number(onDate.slice(0, 4)) - Number(birth.slice(0, 4)) - (onDate.slice(5) < birth.slice(5) ? 1 : 0);
-    return { ...prospect, player: { ...prospect.player, attributes: withExtraAttributes({ ...prospect.player, age, minutes: 0 }) } };
+    return { ...prospect, player: { ...prospect.player, attributes: withExtraAttributes({ ...prospect.player, age, minutes: averageExperience ? null : 0 }) } };
   });
 }
 

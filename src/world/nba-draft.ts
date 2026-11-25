@@ -128,7 +128,8 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
     for (let attempt = 0; attempt < 50 && (!name || usedNames.has(name)); attempt += 1) name = countryName(country, (value('name', nameCapacity(country)) + attempt * 17) % nameCapacity(country));
     name = name && !usedNames.has(name) ? name : `${countryName(country, n % nameCapacity(country)) ?? 'Prospect'} ${n}`;
     usedNames.add(name);
-    const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: 0 }) : skills;
+    // Format 105: the experience the rules assume for unknown minutes, as real players have it (`prospectsWithExtras`).
+    const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: profiles ? null : 0 }) : skills;
     const positionIndex = POSITIONS.indexOf(position);
     const player: Player = {
       id, name, number: value('number', 100), position, heightCm, weightKg: 84 + positionIndex * 6 + value('weight', 10),

@@ -12,7 +12,12 @@ import { overallRating } from '../src/world/overall-rating';
 import { withExtraAttributes } from '../src/world/extra-attributes';
 import { createFixtureMatch, simulateToEnd } from '../src/engine/match';
 import { calibrationSummary, gameLine, type GameLine } from './helpers/match-calibration';
-import { POSITION_PROFILES, profileAt, profiledAttributesFor, usesPositionProfiles, type ProfileRegion } from '../src/world/position-profiles';
+import { growthShares, POSITION_PROFILES, profileAt, profiledAttributesFor, splitByShares, usesPositionProfiles, type ProfileRegion } from '../src/world/position-profiles';
+import { createTraining, processTrainingWeek, TRAINING_ATTRIBUTES } from '../src/world/training';
+import { dateForRound } from '../src/world/season';
+import type { SeasonLifecycle } from '../src/domain/lifecycle';
+import type { SeasonTraining } from '../src/domain/training';
+import type { CareerWorld } from '../src/domain/world';
 
 /**
  * Format 105 (`world.positionProfiles`): generated players (academy and youth prospects, NBA draft prospects) are shaped
@@ -104,6 +109,10 @@ describe('NBA draft prospects', () => {
     expect(draftClassProspects(3, 2, '2027-06-25', true)).toBe(draftClassProspects(3, 2, '2027-06-25', true, false));
   });
 
+  it('carry the experience the rules assume for unknown minutes, as real players do', () => {
+    expect(mean(shaped.map(player => player.attributes.intelligence!))).toBeGreaterThan(mean(flat.map(player => player.attributes.intelligence!)) + .5);
+  });
+
   it('shoot like real NBA players of their position: centres below guards at the line and from three', () => {
     expect(byPosition(shaped, 'SG', 'freeThrow') - byPosition(shaped, 'C', 'freeThrow')).toBeGreaterThan(5);
     expect(byPosition(shaped, 'C', 'twoPoint') - byPosition(shaped, 'C', 'threePoint')).toBeGreaterThan(3);
@@ -120,6 +129,47 @@ describe('the profiled generator', () => {
       for (const key of SKILLS) { expect(skills[key]).toBeGreaterThanOrEqual(1); expect(skills[key]).toBeLessThanOrEqual(20); }
     }
   });
+});
+
+describe('development by position', () => {
+  it('splits a balanced week by how real players of the position differ between rating bands, every skill a little', () => {
+    for (const region of Object.keys(POSITION_PROFILES) as ProfileRegion[]) for (const position of POSITIONS) {
+      const shares = growthShares(region, position);
+      expect(SKILLS.reduce((sum, key) => sum + shares[key], 0)).toBe(10_000);
+      for (const key of SKILLS) expect(shares[key]).toBeGreaterThan(150);
+      for (const points of [0, 1, 7, 20, 33]) {
+        const split = splitByShares(points, shares, points % 7);
+        expect(SKILLS.reduce((sum, key) => sum + split[key], 0)).toBe(points);
+        for (const key of SKILLS) expect(split[key]).toBeGreaterThanOrEqual(0);
+      }
+    }
+    const centre = growthShares('europe', 'C'), guard = growthShares('europe', 'SG');
+    expect(centre.twoPoint).toBeGreaterThan(3 * centre.threePoint);
+    expect(centre.rebounding).toBeGreaterThan(2.5 * centre.freeThrow);
+    expect(guard.threePoint).toBeGreaterThan(guard.rebounding * 4);
+  });
+
+  it('practises centres into better centres and keeps the practice a season brings', () => {
+    const clubs = packWorld.clubs.slice(0, 6);
+    const lifecycle: SeasonLifecycle = { model: 'lifecycle-1', enabledSince: { seasonNumber: 1, round: 1, date: packWorld.startDate, ledgerIndex: 0, contractCount: 0, negotiationCount: 0, recruitmentEventCount: 0, marketEventCount: 0 }, reviews: [], notices: [] };
+    const conditions = Object.fromEntries(clubs.flatMap(club => club.players.map(player => [player.id, 90])));
+    const season = (world: CareerWorld) => {
+      let training: SeasonTraining = createTraining(clubs);
+      for (let round = 1; round < 20; round += 1) training = processTrainingWeek({ world, seed: 5, training, clubs, conditions, injuries: [], seasonNumber: 1, afterRound: round, fromDate: dateForRound(round), toDate: dateForRound(round + 1), lifecycle, fixtures: [] }).training;
+      return training;
+    };
+    const shapedTraining = season({ ...packWorld, playerDevelopment: true, positionProfiles: true }), flatTraining = season({ ...packWorld, playerDevelopment: true });
+    const players = clubs.flatMap(club => club.players), centres = players.filter(player => player.position === 'C');
+    const sum = (training: SeasonTraining, group: readonly Player[], key: keyof SkillAttributes) => group.reduce((total, player) => total + training.points[player.id]![key], 0);
+    const all = (training: SeasonTraining) => TRAINING_ATTRIBUTES.reduce((total, key) => total + sum(training, players, key), 0);
+    expect(centres.length).toBeGreaterThan(3);
+    expect(sum(shapedTraining, centres, 'threePoint')).toBeLessThan(sum(shapedTraining, centres, 'twoPoint') / 2);
+    expect(sum(shapedTraining, centres, 'freeThrow')).toBeLessThan(sum(flatTraining, centres, 'freeThrow') / 1.5);
+    // The earlier rule: every skill an equal share.
+    expect(Math.abs(sum(flatTraining, centres, 'threePoint') - sum(flatTraining, centres, 'twoPoint'))).toBeLessThan(sum(flatTraining, centres, 'twoPoint') * .25);
+    // Practice is redistributed, hardly lost to the potential's limits.
+    expect(all(shapedTraining)).toBeGreaterThan(all(flatTraining) * .85);
+  }, 120_000);
 });
 
 /**

@@ -126,3 +126,38 @@ export function profiledAttributesFor(target: number, position: Position, region
   }
   return skills as unknown as PlayerAttributes;
 }
+
+/**
+ * Format 105, development: a balanced week's practice goes to each skill as real players of the position differ in it
+ * between the lowest and the highest rating band (`growthShares`), so practice makes a centre a better centre rather
+ * than a shooter. Each skill keeps at least `minSlope` skill points per rating point, so every skill still grows a
+ * little. A focus week still trains its one skill.
+ */
+export const POSITION_GROWTH = Object.freeze({ minSlope: 0.02 });
+const growthCache = new Map<string, Readonly<SkillAttributes>>();
+
+/** A position's balanced practice shares in basis points (summing to 10,000), from its rating bands. */
+export function growthShares(region: ProfileRegion, position: Position): Readonly<SkillAttributes> {
+  const key = `${region}|${position}`, known = growthCache.get(key);
+  if (known) return known;
+  const rows = POSITION_PROFILES[region][position], first = rows[0]!, last = rows.at(-1)!;
+  const slopes = SKILLS.map((_, index) => Math.max(POSITION_GROWTH.minSlope, (last[index + 1]! - first[index + 1]!) / (last[0]! - first[0]!)));
+  const total = slopes.reduce((sum, slope) => sum + slope, 0), shares = slopes.map(slope => Math.floor(slope / total * 10_000));
+  // The rounding remainder goes to the largest share, so the shares add up to exactly 10,000.
+  shares[shares.indexOf(Math.max(...shares))]! += 10_000 - shares.reduce((sum, share) => sum + share, 0);
+  const result = Object.freeze(Object.fromEntries(SKILLS.map((skill, index) => [skill, shares[index]!]))) as unknown as Readonly<SkillAttributes>;
+  growthCache.set(key, result);
+  return result;
+}
+
+/**
+ * Whole practice points of a balanced week split by growth shares: each skill its share rounded down, the points left
+ * one each to the largest remainders (ties in the order of `rotation`, the week's starting skill, as balanced weeks
+ * rotate their leftover points). Never negative; the parts add up to `points`.
+ */
+export function splitByShares(points: number, shares: Readonly<SkillAttributes>, rotation: number): SkillAttributes {
+  const parts = SKILLS.map(skill => Math.floor(points * shares[skill] / 10_000));
+  const order = SKILLS.map((skill, index) => ({ index, rest: points * shares[skill] % 10_000, turn: (index - rotation % SKILLS.length + SKILLS.length) % SKILLS.length })).sort((a, b) => b.rest - a.rest || a.turn - b.turn);
+  for (let left = points - parts.reduce((sum, part) => sum + part, 0), next = 0; left > 0; left -= 1, next += 1) parts[order[next % SKILLS.length]!.index]! += 1;
+  return Object.fromEntries(SKILLS.map((skill, index) => [skill, parts[index]!])) as unknown as SkillAttributes;
+}

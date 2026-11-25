@@ -12,7 +12,8 @@ import { coachingAssignments, coachingRatingForAttribute } from './coaching';
 import { createRosterSnapshots, rosterForRound } from './rosters';
 import { fitnessAssignments } from './fitness-policy';
 import { ageTrainingRate, applyAgingAttributes, type LifecycleContext } from './lifecycle-policy';
-import { seasonRounds } from './career-world';
+import { isNbaClub, seasonRounds, worldOf } from './career-world';
+import { growthShares, splitByShares, usesPositionProfiles } from './position-profiles';
 import { EXTRA_MATCH, storedExtras } from './extra-attributes';
 import type { CareerWorld } from '../domain/world';
 import { potentialPointCap, trainingHeadroom, type PotentialContext } from './potential';
@@ -203,6 +204,8 @@ export function processTrainingWeek(given: TrainingWeekInput): { training: Seaso
   // A short interval (after a midweek game day) counts as a whole week of learning, so growth depends on age, not on the
   // calendar; a skill never gains more in an interval than a full week's practice would give it.
   const dayScale = developing ? 7 / dates.length : 1;
+  // Format 105 (`world.positionProfiles`): a balanced week follows how real players of the position develop.
+  const shapedGrowth = developing && usesPositionProfiles(worldOf(input));
   for (const club of clubs) {
     const registered = rosterForRound(rosters, club.id, afterRound);
     const registeredIds = new Set(registered.players.map(player => player.id));
@@ -246,7 +249,9 @@ export function processTrainingWeek(given: TrainingWeekInput): { training: Seaso
       // Discipline (stored in careers started with the five abilities): 2% more practice per point above 10, less below.
       if (player.attributes.discipline !== undefined) budget = disciplinedPractice(budget, player.attributes.discipline);
       const desired = emptyPoints(), gains = emptyPoints(), coachingGains = emptyPoints(), previous = training.points[player.id];
-      if (focus === 'balanced') {
+      const shares = shapedGrowth && focus === 'balanced' ? growthShares(isNbaClub(worldOf(input), club.id) ? 'nba' : 'europe', player.position) : null;
+      if (shares) Object.assign(desired, splitByShares(budget, shares, afterRound - 1));
+      else if (focus === 'balanced') {
         for (const key of TRAINING_ATTRIBUTES) desired[key] = Math.floor(budget / TRAINING_ATTRIBUTES.length);
         for (let index = 0; index < budget % TRAINING_ATTRIBUTES.length; index += 1) desired[TRAINING_ATTRIBUTES[(afterRound - 1 + index) % TRAINING_ATTRIBUTES.length]!] += 1;
       } else desired[focus] = budget;
@@ -263,7 +268,8 @@ export function processTrainingWeek(given: TrainingWeekInput): { training: Seaso
       // towards zero like earned ones, spread like earned ones, and never take away progress already made.
       const facilityMagnitude = Math.floor(Math.abs(facilityUnits) / 1_000_000), facilitySign = facilityUnits < 0 && facilityMagnitude > 0 ? -1 : 1, facilityPoints = facilitySign * facilityMagnitude;
       const facilityDesired = emptyPoints(), facilityGains = emptyPoints();
-      if (focus === 'balanced') {
+      if (shares) { const split = splitByShares(facilityMagnitude, shares, afterRound - 1 + budget % TRAINING_ATTRIBUTES.length); for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = facilitySign * split[key]; }
+      else if (focus === 'balanced') {
         for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = facilitySign * Math.floor(facilityMagnitude / TRAINING_ATTRIBUTES.length);
         for (let index = 0; index < facilityMagnitude % TRAINING_ATTRIBUTES.length; index += 1) facilityDesired[TRAINING_ATTRIBUTES[(afterRound - 1 + budget % TRAINING_ATTRIBUTES.length + index) % TRAINING_ATTRIBUTES.length]!] += facilitySign;
       } else facilityDesired[focus] = facilityPoints;

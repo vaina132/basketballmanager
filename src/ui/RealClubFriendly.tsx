@@ -65,7 +65,7 @@ export function RealClubFriendly({ pack, busy = false, onPackLoaded, onStart, on
       {pack && <>
         <div className="real-friendly-clubs">{select('friendly-home', 'Home', home, setHome)}{select('friendly-away', 'Away', away, setAway)}</div>
         {home && home === away && <p className="real-friendly-error" role="alert">Choose two different clubs.</p>}
-        <p className="real-friendly-note">Each club fields up to twelve players. Unverified abilities and physical details remain estimates. Players use neutral figures; clubs without verified colours appear in grey.</p>
+        <p className="real-friendly-note">Each club fields up to twelve players. Unverified abilities and physical details remain estimates. Players are drawn with their real look; clubs without verified colours appear in grey.</p>
       </>}
     </div>
     <footer className="real-friendly-actions">

@@ -12,6 +12,9 @@ import { buildCrowd, crowdCheer } from './crowd'
 import type { Gate } from './crowd'
 import { CrowdLayers } from './CrowdStands'
 import { COURT_VIEW_BOX, project, rgb } from './projection'
+import { lookOf } from '../ui/look-of'
+import { HAIR_COLORS, SKIN_TONES } from '../ui/player-look'
+import type { PlayerLook } from '../ui/player-look'
 /** Pixels per metre of height (the rim, at 3.05 m, is drawn 36 px above the floor). */
 const LIFT = 12
 
@@ -35,6 +38,38 @@ const HANDS: Record<Pose, [number, number, number, number]> = {
   defend: [-16, -21, 16, -21], catch: [-6, -23, 6, -23], 'hand-up': [-11, -13, 3, -52], down: [-11, -13, 11, -13], walk: [-10, -13, 10, -13],
 }
 
+/** Skin and hair colours of a player's drawn look (the same look as his portrait). */
+function lookColours(look: PlayerLook) {
+  return { skin: SKIN_TONES[look.skin - 1] ?? SKIN_TONES[4], hair: HAIR_COLORS[look.hairColor], beard: HAIR_COLORS[look.beardColor ?? look.hairColor] }
+}
+
+/** The small on-court head (radius 6.5 around 0, -35): hairstyle and beard follow the player's portrait. */
+function CourtHead({ look }: { look: PlayerLook }) {
+  const { skin, hair, beard } = lookColours(look)
+  const cap = (d: string, opacity = 1) => <path d={d} fill={hair} opacity={opacity} />
+  const thin = 'M-6.3-36q.3-6.5 6.3-6.5t6.3 6.5q-2.5-3-6.3-3t-6.3 3Z'
+  const full = 'M-6.6-35q0-8 6.6-8t6.6 8l-1.3-1.6q-2.5-2.6-5.3-2.6t-5.3 2.6Z'
+  const behind = look.hair === 'afro' ? <circle cx="0" cy="-37.5" r="9.6" fill={hair} />
+    : look.hair === 'locs' ? <path d="M-6-38q-2.5 6-1.5 12M6-38q2.5 6 1.5 12M-4-39q-3 7-2 13M4-39q3 7 2 13" stroke={hair} strokeWidth="2.2" strokeLinecap="round" fill="none" />
+    : look.hair === 'long' ? <path d="M-7.3-36q0-8.5 7.3-8.5t7.3 8.5v7.5h-2.5v-5h-9.6v5h-2.5Z" fill={hair} />
+    : null
+  const top = (() => {
+    switch (look.hair) {
+      case 'bald': return null
+      case 'shaved': return cap(thin, .45)
+      case 'buzz': case 'cornrows': return cap(thin, .92)
+      case 'short': case 'receding': return cap(full)
+      case 'side-part': case 'messy': case 'wavy': case 'long': case 'locs': case 'afro': return cap('M-7-34.5q-.6-9.5 7-9.5t7 9.5l-1.6-2.3q-2.4-2.8-5.4-2.8t-5.4 2.8Z')
+      case 'curly-top': return <>{cap(full)}<ellipse cx="0" cy="-42.2" rx="5.6" ry="3.4" fill={hair} /></>
+      case 'locs-bun': return <>{cap(full)}<ellipse cx="0" cy="-44" rx="3.6" ry="3.2" fill={hair} /></>
+      case 'bun': return <>{cap(full)}<circle cx="0" cy="-43.4" r="2.6" fill={hair} /></>
+    }
+  })()
+  const chin = look.beard === 'none' || look.beard === 'moustache' ? null
+    : <path d={look.beard === 'goatee' ? 'M-2.4-31.5q2.4-1 4.8 0q-.4 3-2.4 3.2q-2-.2-2.4-3.2Z' : 'M-6.2-34.5q.6 6.2 6.2 6.2t6.2-6.2q-2 2.4-6.2 2.4t-6.2-2.4Z'} fill={beard} opacity={look.beard === 'stubble' ? .35 : 1} />
+  return <>{behind}<circle cx="0" cy="-35" r="6.5" fill={skin} />{chin}{top}</>
+}
+
 function CourtPlayer({ player, jersey, x, y, pose, lift, stride, active }: { player: Player; jersey: Jersey; x: number; y: number; pose: Pose; lift: number; stride: number; active: boolean }) {
   const p = project(x, y)
   const heightScale = Math.max(.9, Math.min(1.1, player.heightCm / 200))
@@ -42,6 +77,8 @@ function CourtPlayer({ player, jersey, x, y, pose, lift, stride, active }: { pla
   const swing = pose === 'run' ? stride * 4 : 0
   const [lx, ly, rx, ry] = HANDS[pose]
   const air = lift > .05
+  const look = lookOf(player)
+  const { skin } = lookColours(look)
   if (pose === 'down') {
     // A player down on the floor (an injury): lying across the court, the number still readable.
     return <g transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} className="court-player" data-player-id={player.id} data-pose={pose}>
@@ -49,7 +86,7 @@ function CourtPlayer({ player, jersey, x, y, pose, lift, stride, active }: { pla
       <ellipse cx="0" cy="2" rx="20" ry="6" fill="#17201d" opacity=".25" />
       <path d="M-22 0h9M-22-4h9" stroke="#24302b" strokeWidth="4" strokeLinecap="round" />
       <path d="M-13-8h18l2 9H-13Z" fill={jersey.fill} stroke={jersey.trim} strokeOpacity={jersey.trim === '#fff' ? .4 : 1} strokeWidth="1" />
-      <circle cx="12" cy="-4" r="6" fill={player.skinTone} />
+      <circle cx="12" cy="-4" r="6" fill={skin} />
       <text x="-4" y="-1" textAnchor="middle" fontSize="7" fontWeight="800" fill={jersey.text}>{player.number}</text>
     </g>
   }
@@ -59,10 +96,9 @@ function CourtPlayer({ player, jersey, x, y, pose, lift, stride, active }: { pla
     {active && <ellipse cx="0" cy="2" rx="17" ry="7" fill="none" stroke="#faf6e8" strokeWidth="2" />}
     <g transform={`translate(0 ${(-lift * LIFT * 1.6).toFixed(1)}) scale(1 ${heightScale})`}>
       <path d={`M-4-9 ${-wide + stride * 4} ${air ? -3 : 0}M4-9 ${wide - stride * 4} ${air ? -3 : 0}`} stroke="#24302b" strokeWidth="4" strokeLinecap="round" />
-      <path d={`M-8-25 ${lx - swing} ${ly}M8-25 ${rx + swing} ${ry}`} stroke={player.skinTone} strokeWidth="4" strokeLinecap="round" fill="none" />
+      <path d={`M-8-25 ${lx - swing} ${ly}M8-25 ${rx + swing} ${ry}`} stroke={skin} strokeWidth="4" strokeLinecap="round" fill="none" />
       <path d="M-7-28h14l2 18H-9Z" fill={jersey.fill} stroke={jersey.trim} strokeOpacity={jersey.trim === '#fff' ? .4 : 1} strokeWidth={jersey.trim === '#fff' ? .8 : 1.6} />
-      <circle cx="0" cy="-35" r="6.5" fill={player.skinTone} />
-      <path d="M-6-37q0-9 12 0v-2q-6-8-12 0Z" fill={player.hairColor} />
+      <CourtHead look={look} />
       <text x="0" y="-16" textAnchor="middle" fontSize="8" fontWeight="800" fill={jersey.text}>{player.number}</text>
     </g>
   </g>

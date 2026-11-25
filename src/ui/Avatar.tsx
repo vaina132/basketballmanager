@@ -1,28 +1,19 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
 import type { Player } from '../domain/types'
-import { PLAYER_PHOTOS, type PlayerPhoto } from '../data/player-photos'
-import './player-photo.css'
+import { lookOf } from './look-of'
+import { drawingMarkup } from './player-drawing'
+import { rgb } from '../viewer/projection'
 
 /**
- * Real player photos from Wikimedia Commons (owner decision, 22 November 2026). Only real-pack players
- * with a freely licensed photo have entries, so fictional worlds and generated players keep the drawn avatar.
+ * Drawn player portraits (owner decision, 25 November 2026): real players look like themselves (skin tone, hair,
+ * beard, face shape), drawn in one simple style in their club's colours. Real photos are no longer used.
  */
-export const playerPhoto = (playerId: string | null | undefined): PlayerPhoto | null => playerId && Object.hasOwn(PLAYER_PHOTOS, playerId) ? PLAYER_PHOTOS[playerId]! : null
-export const playerPhotoUrl = (photo: PlayerPhoto): string => `/photos/players/${photo.file}`
-
 export function Avatar({ player, color, size = 42 }: { player: Player; color: string; size?: number }) {
-  const photo = playerPhoto(player.id)
-  const [failed, setFailed] = useState(false)
-  if (photo && !failed) return <img className="avatar avatar-photo" src={playerPhotoUrl(photo)} alt={player.name} width={size} height={size} loading="lazy" decoding="async" data-player-photo={player.id} onError={() => setFailed(true)} />
-  return <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={`${player.name}, number ${player.number}`} className="avatar">
-    <rect width="64" height="64" rx="18" fill="var(--surface-3)" />
-    <path d="M8 64v-8c0-12 11-19 24-19s24 7 24 19v8" fill={color} />
-    <path d="M25 34v9c3 5 11 5 14 0v-9" fill={player.skinTone} />
-    <ellipse cx="32" cy="25" rx="13" ry="16" fill={player.skinTone} />
-    <path d="M19 23V17c1-16 25-16 26 0v6l-4-9c-4 3-12 4-19 2Z" fill={player.hairColor} />
-    <path d="M26 25h1m10 0h1" stroke="#292320" strokeWidth="2" strokeLinecap="round" />
-    <path d="M29 33q3 2 6 0" fill="none" stroke="#533d32" strokeWidth="1.3" strokeLinecap="round" />
-    <path d="m20 42 6 6m18-6-6 6" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="2" />
-    <text x="32" y="61" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">{player.number}</text>
-  </svg>
+  const look = lookOf(player)
+  const markup = useMemo(() => {
+    const c = rgb(color)
+    const light = c ? c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114 > 200 : false
+    return drawingMarkup(look, { primary: c ? color : '#687385', secondary: light ? '#1c2521' : '#ffffff' })
+  }, [look, color])
+  return <svg width={size} height={size} viewBox="0 0 128 128" role="img" aria-label={`${player.name}, number ${player.number}`} className="avatar avatar-drawing" data-player-drawing={player.id} dangerouslySetInnerHTML={{ __html: markup }} />
 }

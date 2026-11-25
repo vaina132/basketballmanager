@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Icon } from './Icon'
-import { LogoCredit, PhotoCredits } from './PhotoCredits'
-import './player-photo.css'
+import { LogoCredit } from './LogoCredit'
+import './credits.css'
 
 /** The flag set's MIT licence, which must travel with its pictures (owner feedback, 22 November 2026, evening). */
 export function FlagCredit() {
@@ -15,8 +15,8 @@ export function FlagCredit() {
 }
 
 /**
- * The one Credits view (owner decision, 22 November 2026): logos and every player photo's author and licence,
- * reachable from the footer of every career page instead of a credit line under each photo.
+ * The one Credits view (owner decision, 22 November 2026), reachable from the footer of every career page: logos
+ * and the flag licence. Player photos were replaced by drawings on 25 November 2026, so no photo credits remain.
  */
 export function CreditsDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
@@ -41,7 +41,6 @@ export function CreditsDialog({ onClose }: { onClose: () => void }) {
     <div className="credits-dialog-body" tabIndex={0} role="region" aria-label="Credits">
       <LogoCredit />
       <FlagCredit />
-      <PhotoCredits defaultOpen />
     </div>
   </dialog>
 }

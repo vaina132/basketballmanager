@@ -8,7 +8,7 @@ import { withExtraAttributes } from './extra-attributes';
  */
 export const DATA_PACK_FORMAT = 'basketball-manager-data-pack';
 export const MAX_DATA_PACK_BYTES = 20 * 1024 * 1024;
-/** Real players are drawn as neutral figures, never with a guessed appearance. */
+/** Real players keep neutral colours in the game data; they are drawn from their recorded look (`src/ui/look-of.ts`). */
 export const NEUTRAL_APPEARANCE = Object.freeze({ skinTone: '#9aa0a8', hairColor: '#3b3f45' });
 /** Clubs whose colours are not yet verified use a neutral colour. */
 export const NEUTRAL_CLUB_COLOR = '#6b7280';

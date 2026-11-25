@@ -17,7 +17,7 @@ import { getActiveCareerPlayers, getCareerPlayerAge } from '../src/world/player-
 import { isPlayerRetired } from '../src/world/lifecycle-policy';
 import { NBA_MID_LEVEL, nbaMaximumWage, nbaMinimumWage } from '../src/world/nba-cap';
 import { nbaValue } from '../src/world/nba-moves';
-import { NBA_FREE_AGENCY_RULES, nbaBirdStar, nbaUnsignedLeaves, usesNbaFreeAgency } from '../src/world/nba-free-agency';
+import { NBA_FREE_AGENCY_RULES, nbaBirdStar, nbaLevelWage, nbaUnsignedLeaves, usesNbaFreeAgency } from '../src/world/nba-free-agency';
 
 /**
  * Format 103 (`world.nbaFreeAgency`): NBA stars stay in the league. Measured before on the live pack (NBA alone, seed 7):
@@ -51,14 +51,15 @@ describe('the format-103 NBA free agency rules', () => {
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/world\.nbaFreeAgency.*format 103 or later/);
   });
 
-  it('never lets a player ask an NBA club more than his maximum contract (before, the best-paid asked more than any club may pay)', () => {
+  it('never lets a player ask an NBA club more than his maximum contract or his level (before, the best-paid asked more than any club may pay)', () => {
     const asks = (state: SeasonState, id: string, clubId: string) => [contractAskingWage(state, clubId, id, 'star'), requiredNegotiationWage(id, 2, undefined, state, 'star', clubId), requiredNegotiationWage(id, 3, undefined, state, 'star', clubId)];
-    for (const { id, clubId } of players) for (const ask of asks(fresh, id, clubId)) expect(ask).toBeLessThanOrEqual(maximum(fresh, id));
+    const cap = (id: string) => Math.min(maximum(fresh, id), nbaLevelWage(fresh, id)!);
+    for (const { id, clubId } of players) for (const ask of asks(fresh, id, clubId)) expect(ask).toBeLessThanOrEqual(Math.max(cap(id), nbaMinimumWage(getCareerPlayerAge(fresh, id, fresh.date))));
     const overMaximum = players.filter(({ id, clubId }) => asks(older, id, clubId).some(ask => ask > maximum(older, id)));
     expect(overMaximum.length).toBeGreaterThan(0);
-    // The same players ask exactly their maximum now, and players below it ask as before.
-    for (const { id, clubId } of overMaximum) expect(contractAskingWage(fresh, clubId, id, 'star')).toBe(Math.min(maximum(fresh, id), contractAskingWage(older, clubId, id, 'star')));
-    const below = players.find(({ id, clubId }) => !overMaximum.some(item => item.id === id) && asks(older, id, clubId)[2]! < maximum(older, id))!;
+    // The same players ask at most their maximum now, and players below both limits ask as before.
+    for (const { id, clubId } of overMaximum) expect(contractAskingWage(fresh, clubId, id, 'star')).toBe(Math.min(cap(id), contractAskingWage(older, clubId, id, 'star')));
+    const below = players.find(({ id, clubId }) => !overMaximum.some(item => item.id === id) && asks(older, id, clubId)[2]! < cap(id))!;
     expect(asks(fresh, below.id, below.clubId)).toEqual(asks(older, below.id, below.clubId));
   });
 

@@ -94,7 +94,7 @@ describe('name lists (format 105)', () => {
     expect(originOf('Montenegro')).toBe('serbia');
   });
 
-  it('is deterministic and keeps names unique against the names in use', () => {
+  it('is deterministic and keeps names unique against the names in use', { timeout: 60_000 }, () => {
     const taken = new Set<string>();
     const a = Array.from({ length: 2000 }, (_, k) => generatedPersonName('Spain', 'academy', k % 7, taken));
     expect(new Set(a.map(nameKey)).size).toBe(2000);

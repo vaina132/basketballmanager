@@ -88,7 +88,7 @@ export function openDraft(state: SeasonState): SeasonState {
   const standings = draftStandings(seasonGames(state), state.seasonNumber);
   if (!standings) throw new Error('The draft needs the NBA\'s final standings.');
   const lottery = drawLottery(state.seed, state.seasonNumber, standings.lottery);
-  const prospects = draftClassProspects(state.seed, state.seasonNumber, state.date, storesExtraAttributes(worldOf(state)));
+  const prospects = draftClassProspects(state.seed, state.seasonNumber, state.date, storesExtraAttributes(worldOf(state)), worldOf(state));
   const europeans = europeanProspects(state);
   const entry: DraftClass = { seasonNumber: state.seasonNumber, date: state.date, lottery, order: draftOrder(lottery, standings.worstFirst), prospects: [...prospects], ...(europeans.length ? { europeans } : {}), picks: [] };
   const conditions = { ...state.conditions };
@@ -244,7 +244,7 @@ export function draftVisible(state: SeasonState): boolean {
 /** This season's prospects: the recorded class, or the class that draft day will bring (the same players). */
 export function seasonProspects(state: SeasonState): readonly DraftProspect[] {
   const recorded = draftClassOf(state, state.seasonNumber);
-  return recorded?.prospects ?? draftClassProspects(state.seed, state.seasonNumber, draftDayOf(state), storesExtraAttributes(worldOf(state)));
+  return recorded?.prospects ?? draftClassProspects(state.seed, state.seasonNumber, draftDayOf(state), storesExtraAttributes(worldOf(state)), worldOf(state));
 }
 
 /** The lottery and order once the play-in has decided the field (the recorded ones from draft day). */

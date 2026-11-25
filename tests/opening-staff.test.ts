@@ -119,10 +119,10 @@ describe('opening staff for every club (format 74, coaching-2)', () => {
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      // Seed 11 relegates Atlantic Pilots (w0), who can neither renew their coaches nor afford a fitting new one. Before
+      // Seed 11 (found before format 105, whose new names give generated coaches other styles, so run without it) relegates Atlantic Pilots (w0), who can neither renew their coaches nor afford a fitting new one. Before
       // format 84 they started season two without a coach; now the training (head) coach is appointed first and, when the
       // club can afford no one, the cheapest coach on the market is the minimum appointment.
-      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false, generatedPeople: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       state = rolloverSeason(state);
@@ -180,12 +180,12 @@ describe('computer clubs always fill every staff role (format 84)', () => {
     try {
       // Without the rule (careers before format 84) seed 11 still relegates Atlantic Pilots into a season without a coach.
       const world = moneyWorld();
-      const opening = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false, fullStaff: false }), true);
+      const opening = setEmploymentDelegation(createSeason({ seed: 11, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, staffContracts: false, fullStaff: false, generatedPeople: false }), true);
       expect(Object.hasOwn(opening.coaching, 'fullStaff')).toBe(false);
       expect(staffGaps(playToRollover(opening))).toEqual(['w0-atlantic-pilots coaches']);
       // The rule is stored as `coaching.fullStaff: true` from format 84, only with the wage pool.
       // Without the format-85 and format-87 world rules and format 86's steering head coaches, so the same file can be relabelled as formats 83 and 84.
-      const created = createSeason({ seed: 5, world, managedClubId: world.clubs[3]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false, coachSteering: false, economyBalance: false, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false });
+      const created = createSeason({ seed: 5, world, managedClubId: world.clubs[3]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false, coachSteering: false, economyBalance: false, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false, generatedPeople: false });
       const plain = JSON.parse(serializeSeason(created));
       const variant = (version: number, coaching: object) => JSON.stringify({ ...plain, formatVersion: version, state: { ...plain.state, schemaVersion: version, coaching: { ...plain.state.coaching, ...coaching } } });
       expect(parseSeason(variant(84, {}))).toEqual(created);

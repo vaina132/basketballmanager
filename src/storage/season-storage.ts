@@ -113,6 +113,8 @@ import { NO_CLUB } from '../world/career-rules';
 import { createNegotiations } from '../world/negotiations';
 import { applyMarketEvent, createMarket } from '../world/market';
 import { usesNbaDraft } from '../world/nba-draft-policy';
+import { usesGeneratedPeople } from '../world/generated-people';
+import { countryFlagCode } from '../data/country-flags';
 import { rookieContract } from '../world/nba-draft';
 import type { DraftClass, SeasonDraft } from '../domain/draft';
 import { applyInSeasonEvent, createInSeasonRecruitment as createRecruitment } from '../world/recruitment';
@@ -153,7 +155,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -967,7 +969,10 @@ function validateAcademyShape(value: unknown, state: SeasonState, version: numbe
   const identities = new Set<string>();
   for (const [index, item] of (fields.prospects as unknown[]).entries()) {
     const path = `academy.prospects[${index}]`;
-    const prospect = record(item, path, ['player', 'dateOfBirth', 'seasonWage', 'clubId', 'intakeSeason', 'intakeRound']);
+    // Format 105 (`world.generatedPeople`): every prospect has a nationality with a flag; never in older careers.
+    const people = usesGeneratedPeople(state.world);
+    const prospect = record(item, path, ['player', 'dateOfBirth', 'seasonWage', 'clubId', 'intakeSeason', 'intakeRound', ...(people ? ['nationality'] : [])]);
+    if (people && (typeof prospect.nationality !== 'string' || !countryFlagCode(prospect.nationality))) fail(`${path}.nationality`, 'must name a country with a flag');
     const player = record(prospect.player, `${path}.player`, ['id', 'name', 'number', 'position', 'heightCm', 'weightKg', 'skinTone', 'hairColor', 'attributes']);
     if (typeof player.id !== 'string' || identities.has(player.id) || worldPlayer(worldOf(state), player.id)) fail(`${path}.player.id`, 'must identify a unique prospect outside the original player catalog');
     identities.add(player.id);
@@ -3717,9 +3722,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 93 (NBA step 7, provisional): free agency and NBA-Europe moves.
   if (version < 93 && world.nba && Object.hasOwn(world.nba, 'moves')) fail('world.nba.moves', 'requires format 93 or later');
   if (version < 90 && (Object.hasOwn(world, 'nba') || world.domesticLeagues?.some(league => league.postseason === 'nba-2026-1'))) fail('world.nba', 'requires format 90 or later');
-  // Format 95 (NBA step 8, provisional number): the NBA draft is a rule of new NBA worlds only; its journal exactly with it.
+  // Format 95 (NBA step 8): the NBA draft is a rule of new NBA worlds only; its journal exactly with it.
   if (version < 95 && (world.nba && Object.hasOwn(world.nba, 'draft') || Object.hasOwn(state, 'draft'))) fail('world.nba.draft', 'requires format 95 or later');
-  // Format 96 (NBA step 12, provisional number): the measured balance (ruleset `nba-2026b`) is a rule of new NBA worlds only.
+  // Format 96 (NBA step 12): the measured balance (ruleset `nba-2026b`) is a rule of new NBA worlds only.
   if (version < 96 && world.nba && Object.hasOwn(world.nba, 'balance')) fail('world.nba.balance', 'requires format 96 or later');
   // Format 97 (release check "long careers"): its fixes are rules of new careers only.
   if (version < 97 && Object.hasOwn(world, 'longCareers')) fail('world.longCareers', 'requires format 97 or later');
@@ -3727,7 +3732,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 98 && Object.hasOwn(world, 'careerBalance')) fail('world.careerBalance', 'requires format 98 or later');
   // Format 99 (owner decision 24 November 2026): the cash balance is a rule of new careers only.
   if (version < 99 && Object.hasOwn(world, 'cashBalance')) fail('world.cashBalance', 'requires format 99 or later');
-  // Format 100 (owner decision 24 November 2026, provisional number): EuroLeague jobs are a rule of new careers only.
+  // Format 100 (owner decision 24 November 2026): EuroLeague jobs are a rule of new careers only.
   if (version < 100 && Object.hasOwn(world, 'euroleagueJobs')) fail('world.euroleagueJobs', 'requires format 100 or later');
   // Format 102 (owner decision 24 November 2026): the squad refresh is a rule of new careers only.
   if (version < 102 && Object.hasOwn(world, 'squadRefresh')) fail('world.squadRefresh', 'requires format 102 or later');
@@ -4141,6 +4146,9 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 79 guard: careers created with the richer play model (`plays-2`) need format 79 or later.
   // Format 81 guard: careers created with the dead balls of a real game (`plays-3`) need format 81 or later.
   if (Object.hasOwn(state, 'matchModel') && (state.matchModel === 'plays-3' ? version < 81 : state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 (format 79 or later) or plays-3 (format 81 or later)');
+  // Format 105 (owner data check 24 November 2026): nationalities and unique names of generated people are a rule of new
+  // careers only. Checked last, so an older file's own format checks report first.
+  if (version < 105 && state.world && Object.hasOwn(state.world, 'generatedPeople')) fail('world.generatedPeople', 'requires format 105 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

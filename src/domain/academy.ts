@@ -9,6 +9,8 @@ export interface AcademyProspect {
   clubId: string;
   intakeSeason: number;
   intakeRound: number;
+  /** Format 105 (`world.generatedPeople`): the prospect's nationality; absent in older careers. */
+  nationality?: string;
 }
 
 export interface AcademyIntake {

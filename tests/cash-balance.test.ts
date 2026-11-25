@@ -45,9 +45,9 @@ const play = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch
 /** Everything automatic: recruitment, facilities, wage prepayments and sponsorship of the manager's club too. */
 const delegate = (state: SeasonState) => setSponsorshipDelegation(setPayrollDelegation(setFacilityDelegation(setEmploymentDelegation(state, true), true), true), true);
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeasonCompact(state));
-/** Season 1 and its offseason played automatically, then the rollover into season 2. */
+/** Season 1 and its offseason played automatically, then the rollover into season 2 (seeded before format 105, whose new names give generated coaches other styles, so without it). */
 function secondSeason(cashBalance: boolean): SeasonState {
-  let state = delegate(createSeason({ seed: 12, world: moneyWorld(), managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance }));
+  let state = delegate(createSeason({ seed: 12, world: moneyWorld(), managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance, generatedPeople: false }));
   while (state.status === 'active') state = advanceSeason(play(state));
   for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
   return rolloverSeason(state);
@@ -61,13 +61,13 @@ describe('the cash balance marker (format 99)', () => {
     const state = createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS });
     expect(state.world!.cashBalance).toBe(true);
     expect(usesCashBalance(state)).toBe(true);
-    expect(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false }).world!.cashBalance).toBeUndefined();
+    expect(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false, generatedPeople: false }).world!.cashBalance).toBeUndefined();
     expect(createSeason({ seed: 5, ...NEW_CAREER_SYSTEMS }).world?.cashBalance).toBeUndefined();
     expect(() => createSeason({ seed: 5, world, cashBalance: 'yes' as unknown as boolean })).toThrow(/cash balance setting/);
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 98; envelope.state.schemaVersion = 98;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/cashBalance.*format 99/);
-    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false })));
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false, generatedPeople: false })));
     older.formatVersion = 98; older.state.schemaVersion = 98;
     expect(parseSeason(JSON.stringify(older)).world!.cashBalance).toBeUndefined();
     const bad = JSON.parse(serializeSeason(state));
@@ -152,7 +152,7 @@ describe('NBA revenue (format 99)', () => {
 
   it('opens NBA clubs on the trimmed revenue range, with the same payroll ceiling, and leaves format 98 worlds alone', () => {
     const state = createSeason({ seed: 7, world, managedClubId: NBA_CLUB_IDS[4]!, ...NEW_CAREER_SYSTEMS });
-    const older = createSeason({ seed: 7, world, managedClubId: NBA_CLUB_IDS[4]!, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false });
+    const older = createSeason({ seed: 7, world, managedClubId: NBA_CLUB_IDS[4]!, ...NEW_CAREER_SYSTEMS, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false, generatedPeople: false });
     expect(state.world!.cashBalance).toBe(true);
     const shares: number[] = [];
     for (const clubId of NBA_CLUB_IDS) {

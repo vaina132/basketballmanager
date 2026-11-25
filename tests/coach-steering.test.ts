@@ -151,7 +151,8 @@ const manager = { name: 'Test Manager', dateOfBirth: '1980-05-01', nationality: 
 
 /** Half a season (through week 16) with every system, recording each week's applied training plans. */
 function halfSeason(steering: boolean) {
-  let state: SeasonState = createSeason({ seed: 11, world, managedClubId: FENERBAHCE, ...NEW_CAREER_SYSTEMS, coachSteering: steering, manager });
+  // Measured before format 105, whose new names give generated coaches other styles, so it runs without it.
+  let state: SeasonState = createSeason({ seed: 11, world, managedClubId: FENERBAHCE, ...NEW_CAREER_SYSTEMS, coachSteering: steering, manager, generatedPeople: false });
   const weeks: Record<string, TrainingPlan>[] = [];
   for (let guard = 0; guard < 400 && state.round < 16; guard += 1) {
     if (state.activeMatch && state.activeMatch.status !== 'finished') { state = { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) }; continue; }

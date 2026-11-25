@@ -1,7 +1,7 @@
 {
  "source": "Distinct country fields of the published real pack (game-data/real-pack.json), saved so tests never fetch it. Refresh when a new pack is published.",
- "packVersion": "2026.11-world-15-online",
- "savedAt": "2026-11-23",
+ "packVersion": "2026.11-world-17-online",
+ "savedAt": "2026-11-25",
  "playerNationalities": [
   "Afghanistan",
   "Albania",

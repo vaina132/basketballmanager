@@ -31,6 +31,7 @@ import { rookieContract } from './nba-draft';
 import { usesNbaDraft } from './nba-draft-policy';
 import { applyDraftPicks, automaticPicks, draftRoomFor, managerOnTheClock, openDraft, pendingDraftDay } from './nba-draft-policy';
 import { answerOffseasonTrades } from './trades';
+import { budgetWithdrawalReason, nextBudgetWithdrawal } from './offer-withdrawals';
 
 export function createMarket(): SeasonMarket { return { model: 'market-1', enabledSince: null, windows: [] }; }
 
@@ -118,6 +119,9 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   if (event.type === 'withdraw') {
     const offer = window.offers.find(item => item.id === event.offerId);
     if (!offer || !isLiveMarketOffer(offer)) throw new Error('Only an outstanding offer can be withdrawn.');
+    // Format 103: the game's withdrawal of the manager's offer that his wage budget no longer covers (`offer-withdrawals.ts`).
+    const budgetReason = budgetWithdrawalReason(state, window, offer, event);
+    if (budgetReason) throw new Error(budgetReason);
     return replaceWindow(state, { ...window, events: [...window.events, { ...event }], offers: window.offers.map(item => item.id === offer.id ? { ...item, status: 'withdrawn', closedOn: state.date } : item) });
   }
   if (event.type === 'draft') {
@@ -355,7 +359,7 @@ export function scheduleMarketRecruitment(state: SeasonState): SeasonState {
  * bid leaves a gap the club's ordinary recruitment fills. Unchanged state without the rule.
  */
 function refreshSquad(state: SeasonState, clubId: string, target: number, finalProposalDay: boolean): SeasonState {
-  // Format 103: NBA clubs also make room for a clearly better free agent (`nba-free-agency.ts`).
+  // Format 107: NBA clubs also make room for a clearly better free agent (`nba-free-agency.ts`).
   if (finalProposalDay || !usesSquadRefresh(state) && !nbaMakesRoom(state, clubId) || !isCompetitiveMarket(state)) return state;
   if (addMarketDays(state.date, MARKET_RESPONSE_DAYS) > getMarketWindow(state)!.closesOn) return state;
   let next = state;
@@ -367,7 +371,7 @@ function refreshSquad(state: SeasonState, clubId: string, target: number, finalP
     // A refresh judges players by their real skills (`refreshRating`): a computer club's scouting rarely covers free
     // agents, whose unknown ratings would otherwise all read as the neutral prior.
     const ratings = new Map<string, number>();
-    // Format 103: an NBA club making room judges players by their overall rating at their position (`nbaValue`), as the
+    // Format 107: an NBA club making room judges players by their overall rating at their position (`nbaValue`), as the
     // NBA's level is read everywhere else; the sum of skills undervalues specialists such as centres.
     const nbaRoom = nbaMakesRoom(next, clubId), margin = nbaRoom ? NBA_FREE_AGENCY_RULES.roomMargin : SQUAD_REFRESH_RULES.margin;
     const rating = (id: string): number => { let value = ratings.get(id); if (value === undefined) { value = nbaRoom ? nbaValue(next, id) : refreshRating(next, id); ratings.set(id, value); } return value; };
@@ -422,9 +426,15 @@ export function advanceMarket(state: SeasonState): SeasonState {
   const drafting = draftClassOf(state, state.seasonNumber);
   if (drafting && !isDraftComplete(drafting)) state = delegateDraft(state);
   // Delegation can be switched on at any decision point, including the last proposal day.
-  const prepared = scheduleMarketRecruitment(state);
-  const date = getNextMarketDate(prepared);
+  let prepared = scheduleMarketRecruitment(state);
+  let date = getNextMarketDate(prepared);
   if (!date) throw new Error('Recruitment has closed. Review the squad and start next season.');
+  // Format 103: the manager's offers answered on the next day that his wage budget no longer covers are withdrawn first
+  // (a withdrawn offer's answer day may have been the next day, so the day is worked out again after each).
+  for (let withdrawal = nextBudgetWithdrawal(prepared, date); withdrawal; withdrawal = nextBudgetWithdrawal(prepared, date)) {
+    prepared = activateCompetition(applyMarketEvent(prepared, withdrawal));
+    date = getNextMarketDate(prepared)!;
+  }
   // Format 95: on draft day the computer clubs pick until the manager's club is on the clock (all picks when he
   // delegates recruitment or has no club), before the clubs make their offers of the day.
   const advanced = scheduleMarketRecruitment(runDraftClock(activateCompetition(applyMarketEvent(prepared, { type: 'advance', date }))));

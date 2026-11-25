@@ -20,7 +20,7 @@ import { nbaValue } from '../src/world/nba-moves';
 import { NBA_FREE_AGENCY_RULES, nbaBirdStar, nbaLevelWage, nbaUnsignedLeaves, usesNbaFreeAgency } from '../src/world/nba-free-agency';
 
 /**
- * Format 103 (`world.nbaFreeAgency`): NBA stars stay in the league. Measured before on the live pack (NBA alone, seed 7):
+ * Format 107 (`world.nbaFreeAgency`): NBA stars stay in the league. Measured before on the live pack (NBA alone, seed 7):
  * 12 of the 17 players rated 86+ whose contracts ended after season 1 asked more than the most an NBA contract may pay
  * them (their wage plus the Star role's 15%, plus 5% for two seasons), the others did not fit their owners' ceilings, so
  * every renewal request was declined, no club could sign them in the offseason, and all 17 left the world at the next
@@ -37,7 +37,7 @@ describe('the format-103 NBA free agency rules', () => {
   const older = createSeason({ seed: 21, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS, nbaFreeAgency: false });
   const maximum = (state: SeasonState, id: string) => nbaMaximumWage(getCareerPlayerAge(state, id, state.date));
 
-  it('marks new careers in worlds with the NBA\'s money rules only, and refuses the marker before format 103', () => {
+  it('marks new careers in worlds with the NBA\'s money rules only, and refuses the marker before format 107', () => {
     expect(fresh.world!.nbaFreeAgency).toBe(true);
     expect(usesNbaFreeAgency(fresh)).toBe(true);
     expect(older.world!.nbaFreeAgency).toBeUndefined();
@@ -47,8 +47,8 @@ describe('the format-103 NBA free agency rules', () => {
     expect(createSeason({ seed: 3, world: europe, managedClubId: europe.clubs[0]!.id, ...NEW_CAREER_SYSTEMS }).world!.nbaFreeAgency).toBeUndefined();
     const envelope = JSON.parse(serializeSeason(fresh));
     expect(parseSeason(JSON.stringify(envelope)).world!.nbaFreeAgency).toBe(true);
-    envelope.formatVersion = 102; envelope.state.schemaVersion = 102;
-    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/world\.nbaFreeAgency.*format 103 or later/);
+    envelope.formatVersion = 106; envelope.state.schemaVersion = 106;
+    expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/world\.nbaFreeAgency.*format 107 or later/);
   });
 
   it('never lets a player ask an NBA club more than his maximum contract or his level (before, the best-paid asked more than any club may pay)', () => {
@@ -102,7 +102,7 @@ describe('the format-103 NBA free agency rules', () => {
   });
 });
 
-describe('one automatic NBA season, offseason and opening with format 103', () => {
+describe('one automatic NBA season, offseason and opening with format 107', () => {
   let complete: SeasonState, next: SeasonState;
   beforeAll(() => {
     let state = setEmploymentDelegation(createSeason({ seed: 21, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS }), true);

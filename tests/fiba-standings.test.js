@@ -108,8 +108,8 @@ describe('FIBA Official Basketball Rules 2026, Appendix D (the labelled default,
   });
 
   it('ranks a career\'s live and archived tables by the rule, with real byes, strict saves and the rule kept after rollover', () => {
-    // Level 7 career rules (`career-1`): new careers (format 63) protect the first season, and this test needs a dismissal in it.
-    let state = setEmploymentDelegation(asCareer1(createSeason({ world: fibaWorld(), seed: 10, ...NEW_CAREER_SYSTEMS, matchPlays: false, presidents: false, injuryMode: 'off', calmPlayingTime: false })), true);
+    // Level 7 career rules (`career-1`): new careers (format 63) protect the first season, and this test needs a dismissal in it (seeded before format 105, so without it).
+    let state = setEmploymentDelegation(asCareer1(createSeason({ world: fibaWorld(), seed: 10, ...NEW_CAREER_SYSTEMS, matchPlays: false, presidents: false, injuryMode: 'off', calmPlayingTime: false, generatedPeople: false })), true);
     const north = state.world.domesticLeagues[0];
     state = play(state);
     // Week one: in the five-club league one club had a bye and has 0 points, below the two clubs that lost (1 point each).

@@ -379,9 +379,9 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       // as over it (with the owner's ceiling as the whole wages pool, a club short of players could otherwise afford no one).
       const minimumNeeded = size <= minimumRoster && (capRoute === 'minimum' || usesNbaBalance(state) && capMinimum !== undefined && seasonWage <= capMinimum);
       const ordinary = capClub() && (resolving || minimumNeeded) ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
-      // Format 103: Bird rights keep a club's best players past its owner's ceiling (`nba-free-agency.ts`).
+      // Format 107: Bird rights keep a club's best players past its owner's ceiling (`nba-free-agency.ts`).
       const limit = capRoute === 'bird' && nbaBirdStar(state, playerId) ? Math.max(ordinary, NBA_BIRD_STAR_CEILING) : ordinary;
-      // Format 103: released salary (dead money) counts against an NBA club's wage budget, as it counts for the tax.
+      // Format 107: released salary (dead money) counts against an NBA club's wage budget, as it counts for the tax.
       const released = capClub() && usesNbaFreeAgency(state) ? nbaDeadMoney(state.employment, clubId, year) : 0;
       if (summary.seasonWages + summary.reservedWages + seasonWage + reserve + released > limit) { reason = `This offer exceeds the season ${year} wage budget after protecting space for ${minRosterText(state, clubId)} players${summary.reservedWages ? ' and pending offers' : ''}.`; break; }
     }

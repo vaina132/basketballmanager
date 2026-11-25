@@ -49,7 +49,7 @@ describe('club money across a real rollover with promotion and relegation (forma
       // opening review's retirement notices seeing only departures decided at earlier season ends. With seeds 9 and 10
       // a club relegated out of the full world after season one returns after season two, and the strict check of season
       // three's opening then refuses its scouting office's squad memories (reported separately; a save-check matter).
-      let state = setEmploymentDelegation(createSeason({ seed: 12, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
+      let state = setEmploymentDelegation(createSeason({ seed: 12, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false }), true);
       expect(state.economySeasons).toEqual({ model: 'economy-seasons-1', seasons: [] });
       // An older career (no per-season records) plays the same final week and offseason without them.
       let older: SeasonState | null = null;
@@ -160,7 +160,7 @@ describe('contract offers are checked with the money known when they were made',
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      let state = setEmploymentDelegation(createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }), true);
+      let state = setEmploymentDelegation(createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       // The same path as the test above: a relegated club priced at its old maximum.
@@ -195,8 +195,9 @@ describe('a manager appointed by a club promoted from the next division', () => 
     requireWorldContexts(true);
     try {
       const world = moneyWorld();
-      // Format 98's career balance keeps this manager in his job, so the scenario runs on the earlier board rules.
-      let state = setEmploymentDelegation(createSeason({ seed: 91, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, careerBalance: false }), true);
+      // Format 98's career balance keeps this manager in his job, so the scenario runs on the earlier board rules (and
+      // without format 105, whose new names give generated coaches other styles).
+      let state = setEmploymentDelegation(createSeason({ seed: 91, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, careerBalance: false, generatedPeople: false, positionProfiles: false }), true);
       while (state.status === 'active') state = advanceSeason(play(state));
       for (let steps = 0; steps < 120 && getMarketStartReason(state); steps += 1) state = advanceMarket(state);
       const priced = getPostseasons(state, 1)[0]!.outcome.relegated.map(entry => entry.clubId).find((id): id is string => id !== null)!;

@@ -236,7 +236,31 @@ export interface CareerWorld {
    */
   playerDevelopment?: true;
   /**
-   * Format 103 (new careers in worlds with the NBA's money rules, option `nbaFreeAgency`): NBA stars are re-signed and
+   * Format 103 (new careers with the spending balance, option `managerOfferWithdrawal`): the manager's pending offers that
+   * no longer fit his club's wage budget on the day the player answers are withdrawn the day before, as a recorded step,
+   * and the Inbox says which and why (`src/world/offer-withdrawals.ts`).
+   */
+  managerOfferWithdrawal?: true;
+  /**
+   * Format 104 (owner request 24 November 2026, new careers with player development, option `backgroundSquads`):
+   * background clubs' squads develop, age, retire and are renewed at each season change, derived from the seed
+   * (`src/world/background-squads.ts`).
+   */
+  backgroundSquads?: true;
+  /**
+   * Format 105 (owner data check 24 November 2026, new real-club careers, option `generatedPeople`): generated people
+   * have a nationality and names from much larger lists, and no full name is used twice in the world
+   * (`src/world/generated-people.ts`, `src/data/generated-names.ts`).
+   */
+  generatedPeople?: true;
+  /**
+   * Format 106 (new real-data careers, option `positionProfiles`): generated players (academy prospects, NBA draft
+   * prospects) are shaped like real players of their position (`src/world/position-profiles.ts`), so league shooting
+   * profiles stay realistic as real players retire.
+   */
+  positionProfiles?: true;
+  /**
+   * Format 107 (new careers in worlds with the NBA's money rules, option `nbaFreeAgency`): NBA stars are re-signed and
    * signed as in the real league (`src/world/nba-free-agency.ts`): asks within the maximum contract, Bird rights past the
    * owner's ceiling for stars, falling asks for unsigned players, clubs making room for them, and departures only of players nobody signs.
    */

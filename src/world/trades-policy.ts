@@ -308,7 +308,7 @@ function quickTradeFits(values: ValueContext, first: TradeSide, second: TradeSid
 }
 
 /**
- * Format 103 (`nba-free-agency.ts`): a computer club takes on no salary in a trade above its owner's payroll ceiling
+ * Format 107 (`nba-free-agency.ts`): a computer club takes on no salary in a trade above its owner's payroll ceiling
  * (or above its payroll before the trade, when that is already higher): with stars now re-signed, trades had taken
  * small-market clubs far into the luxury tax and into unpaid costs. Read from the world and the contracts only, so save
  * checks plan the same trades.

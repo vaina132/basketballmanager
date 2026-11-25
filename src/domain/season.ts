@@ -236,16 +236,18 @@ export interface DomesticDivisions {
 /** Format 92 (NBA step 6): NBA money in new NBA worlds (`world.nba.cap`): estimated NBA salaries and revenue, the salary cap with its exceptions (`capRoute` on contracts and offers), rosters of 13-15, the luxury tax (`luxury-tax`, `tax-share` ledger entries) and the owner's payroll ceiling and playoff aim. */
 /** Format 93 (NBA step 7, provisional): free agency and NBA-Europe moves in new NBA worlds (`world.nba.moves`, `src/world/nba-moves.ts`): offers chosen by NBA level, European wages for NBA players, the buyout allowance, the minimum team salary (`salary-floor` ledger entries) and NBA-only worlds' kept population (players without a contract leave when the season opens). */
 /** Format 94 (NBA step 9): trades between NBA clubs in new NBA worlds (`world.nbaTrades`): the `trades-1` journal of the manager's offers (`state.trades`), completed trades (`employment.trades`) and `trade` contracts that carry each traded player's terms on unchanged. */
-/** Format 95 (NBA step 8, provisional number): the NBA draft in new NBA worlds (`world.nba.draft`, `state.draft`): generated prospects, the lottery, two rounds of picks on draft day with rookie contracts (`kind` 'drafted'). */
-/** Format 96 (NBA step 12, provisional number): the measured NBA balance in new NBA worlds (`world.nba.balance`, ruleset `nba-2026b`). */
+/** Format 95 (NBA step 8): the NBA draft in new NBA worlds (`world.nba.draft`, `state.draft`): generated prospects, the lottery, two rounds of picks on draft day with rookie contracts (`kind` 'drafted'). */
+/** Format 96 (NBA step 12): the measured NBA balance in new NBA worlds (`world.nba.balance`, ruleset `nba-2026b`). */
 /** Format 97 (release check "long careers"): fixes for new careers in worlds with researched club money (`world.longCareers`, `src/world/long-careers.ts`). */
 /** Format 98 (manager careers): board and career balance for new careers (`world.careerBalance`, `src/world/career-balance.ts`). */
-/** Format 99 (owner decision 24 November 2026, provisional number): cash no longer piles up in new careers with researched club money (`world.cashBalance`, `src/world/cash-balance.ts`). */
-/** Format 100 (owner decision 24 November 2026, provisional number): EuroLeague clubs are bigger jobs than other top-division clubs in new careers without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`). */
+/** Format 99 (owner decision 24 November 2026): cash no longer piles up in new careers with researched club money (`world.cashBalance`, `src/world/cash-balance.ts`). */
+/** Format 100 (owner decision 24 November 2026): EuroLeague clubs are bigger jobs than other top-division clubs in new careers without the NBA (`world.euroleagueJobs`, `src/world/euroleague-jobs.ts`). */
 /** Format 101 (owner decision 24 November 2026): realistic player development in new real-data careers (`world.playerDevelopment`, `src/world/player-development.ts`). */
-/** Format 102 (owner decision 24 November 2026, provisional number): rich clubs with a full squad refresh it in new careers with the spending balance (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
-/** Format 103: NBA free agency keeps the league's stars in new careers with the NBA's money rules (`world.nbaFreeAgency`, `src/world/nba-free-agency.ts`). */
-export const SEASON_SCHEMA_VERSION = 103;
+/** Format 102 (owner decision 24 November 2026): rich clubs with a full squad refresh it in new careers with the spending balance (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
+/** Format 105 (owner data check 24 November 2026): generated people have nationalities and unique names from larger lists in new real-club careers (`world.generatedPeople`, `src/world/generated-people.ts`). */
+/** Format 106 (provisional number): generated players are shaped like real players of their position in new real-data careers (`world.positionProfiles`, `src/world/position-profiles.ts`). */
+/** Format 107 (provisional number): NBA free agency keeps the league's stars in new careers with the NBA's money rules (`world.nbaFreeAgency`, `src/world/nba-free-agency.ts`). */
+export const SEASON_SCHEMA_VERSION = 107;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;
@@ -320,7 +322,7 @@ export interface SeasonState {
   media?: SeasonMedia;
   /** Format 72: each season's club money figures, in new careers of real-data worlds; absent careers keep the world's opening figures. */
   economySeasons?: SeasonEconomy;
-  /** Format 95 (NBA step 8, provisional number): the NBA draft's classes, exactly in worlds with `world.nba.draft`. */
+  /** Format 95 (NBA step 8): the NBA draft's classes, exactly in worlds with `world.nba.draft`. */
   draft?: SeasonDraft;
   activeFixtureId: string | null;
   activeMatch: MatchState | null;

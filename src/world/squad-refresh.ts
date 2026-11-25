@@ -65,7 +65,7 @@ export function refreshesThisWindow(state: SeasonState, clubId: string): number 
 
 /** Format 102: the refreshes a club may make in one window, by its squad appetite (0 when it does not spend from a surplus). */
 export function refreshLimit(state: SeasonState, clubId: string): number {
-  // Format 103: every NBA club run automatically may make room once a window for a clearly better free agent (`nba-free-agency.ts`).
+  // Format 107: every NBA club run automatically may make room once a window for a clearly better free agent (`nba-free-agency.ts`).
   const room = nbaMakesRoom(state, clubId) ? NBA_FREE_AGENCY_RULES.roomPerWindow : 0;
   if (!usesSquadRefresh(state) || !spendsSurplus(state, clubId)) return room;
   return Math.max(room, clubAppetite(state, clubId, 'squad') >= SQUAD_REFRESH_RULES.secondRefreshAppetite ? 2 : 1);
@@ -101,6 +101,6 @@ export function refreshRating(state: SeasonState, playerId: string): number {
 /** Format 102: the most a refresh may cost (the release plus any transfer fee): the club's planned spending from its surplus. */
 export function refreshBudget(state: SeasonState, clubId: string): number {
   const planned = usesSquadRefresh(state) ? plannedSurplusSpend(state, clubId) : 0;
-  // Format 103: an NBA club making room may pay a release up to the allowance (a minimum contract's guaranteed wages).
+  // Format 107: an NBA club making room may pay a release up to the allowance (a minimum contract's guaranteed wages).
   return nbaMakesRoom(state, clubId) ? Math.max(planned, NBA_RELEASE_ALLOWANCE) : planned;
 }

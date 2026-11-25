@@ -73,7 +73,7 @@ describe('three automatic NBA seasons under the salary cap', () => {
       // Format 93: NBA clubs no longer pay each other transfer fees (trades come with NBA step 9), so a season after
       // the first market can have as few as two payers (two in season 2 of this seed).
       expect(report.payers.length).toBeGreaterThanOrEqual(2);
-      // Format 103 (`nba-free-agency.ts`): clubs re-sign their stars with Bird rights past their owners' ceilings, so a
+      // Format 107 (`nba-free-agency.ts`): clubs re-sign their stars with Bird rights past their owners' ceilings, so a
       // season can have a few more payers (6, 9 and 6 with this seed; before, 7, 2-8).
       expect(report.payers.length).toBeLessThanOrEqual(10);
       expect(report.shares).toBeLessThanOrEqual(report.taxTotal);

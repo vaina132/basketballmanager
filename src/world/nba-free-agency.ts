@@ -16,7 +16,7 @@ import { contractForSeason } from './employment-policy';
 import { nbaValue } from './nba-moves';
 
 /**
- * Format 103 (new careers in worlds with the NBA's money rules, `world.nbaFreeAgency`): NBA free agency keeps the
+ * Format 107 (new careers in worlds with the NBA's money rules, `world.nbaFreeAgency`): NBA free agency keeps the
  * league's stars, as the real league does.
  *
  * Why stars left before (formats 93-102), measured on the live pack (world-16, NBA alone, seed 7): 17 players rated
@@ -83,7 +83,7 @@ export const NBA_FREE_AGENCY_RULES = Object.freeze({
   keepVeteranLevel: 80,
 });
 
-/** Whether a career's world uses format 103's NBA free agency. */
+/** Whether a career's world uses format 107's NBA free agency. */
 export const usesNbaFreeAgency = (context: WorldContext | undefined): boolean => context?.world?.nbaFreeAgency === true && context.world.nba?.cap === 'nba-cap-1';
 
 export type NbaFreeAgencyContext = CareerPlayerContext & { employment?: SeasonState['employment']; status?: SeasonState['status'] };
@@ -91,14 +91,14 @@ export type NbaFreeAgencyContext = CareerPlayerContext & { employment?: SeasonSt
 /** The most (euro cents) a release to make room may cost. */
 export const NBA_RELEASE_ALLOWANCE = usdToCents(NBA_FREE_AGENCY_RULES.releaseAllowanceUsd);
 
-/** Format 103: whether a club makes room for clearly better free agents (an NBA club; the caller runs it automatically). */
+/** Format 107: whether a club makes room for clearly better free agents (an NBA club; the caller runs it automatically). */
 export const nbaMakesRoom = (context: WorldContext, clubId: string): boolean => usesNbaFreeAgency(context) && isCapClub(context, clubId);
 
 /** The payroll (euro cents) a club may reach re-signing one of its stars with Bird rights. */
 export const NBA_BIRD_STAR_CEILING = Math.floor(usdToCents(NBA_FREE_AGENCY_RULES.birdStarCeilingUsd) / 1_000_000) * 1_000_000;
 
 /**
- * Format 103: whether a club run automatically can pay from its cash the luxury tax a payroll (euro cents) for
+ * Format 107: whether a club run automatically can pay from its cash the luxury tax a payroll (euro cents) for
  * `seasonNumber` would bring: for a later season, after the tax still due on the current season's payroll (charged at
  * the end of the regular season) and after the owner's take at the next opening (format 99).
  */
@@ -130,7 +130,7 @@ function midLevelAsk(context: NbaFreeAgencyContext, clubId: string, playerId: st
 /** The mid-level exception in contract wage steps (EUR 500, rounded down), the most a free agent asks other clubs early in the window. */
 const MID_LEVEL_ASK = Math.floor(NBA_MID_LEVEL / 50_000) * 50_000;
 
-/** Format 103: the most a player asks an NBA club (null when no cap applies: older careers, European clubs). */
+/** Format 107: the most a player asks an NBA club (null when no cap applies: older careers, European clubs). */
 export function nbaDemandCap(context: NbaFreeAgencyContext, clubId: string | undefined, playerId: string): number | null {
   if (!clubId || !usesNbaFreeAgency(context) || !isCapClub(context, clubId)) return null;
   let age: number | null = null;
@@ -172,7 +172,7 @@ function nbaLevelCurve(world: CareerWorld): readonly (number | null)[] {
   return curve;
 }
 
-/** Format 103: the most a player asks at his overall rating today (null without NBA players). */
+/** Format 107: the most a player asks at his overall rating today (null without NBA players). */
 export function nbaLevelWage(context: CareerPlayerContext, playerId: string): number | null {
   return nbaLevelCurve(worldOf(context))[Math.max(0, Math.min(99, nbaValue(context, playerId)))] ?? null;
 }
@@ -183,13 +183,13 @@ export function cappedNbaDemand(context: NbaFreeAgencyContext, clubId: string | 
   return cap !== null && cap < demand ? cap : demand;
 }
 
-/** Format 103: whether re-signing this player with Bird rights may pass the owner's ceiling (his overall today). */
+/** Format 107: whether re-signing this player with Bird rights may pass the owner's ceiling (his overall today). */
 export function nbaBirdStar(context: CareerPlayerContext, playerId: string): boolean {
   return usesNbaFreeAgency(context) && nbaValue(context, playerId) >= NBA_FREE_AGENCY_RULES.birdStarLevel;
 }
 
 /**
- * Format 103 (NBA-only worlds): whether a player still unsigned when the season opens leaves the world (nobody would
+ * Format 107 (NBA-only worlds): whether a player still unsigned when the season opens leaves the world (nobody would
  * sign him): below the keep level, an older player below the veteran level, or one already unsigned all last season.
  */
 export function nbaUnsignedLeaves(context: NbaFreeAgencyContext, playerId: string): boolean {

@@ -41,7 +41,7 @@ const play = (state: SeasonState) => state.activeMatch ? { ...state, activeMatch
 const roundTrip = (state: SeasonState) => parseSeason(serializeSeasonCompact(state));
 // Measured on the format-89 board rules: format 98's career balance changes the results targets this spending follows,
 // and format 101's squad refresh spends the same surplus.
-const career = (world: CareerWorld, seed: number, spendingBalance = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, spendingBalance, careerBalance: false, squadRefresh: false, playerDevelopment: false });
+const career = (world: CareerWorld, seed: number, spendingBalance = true) => createSeason({ seed, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, spendingBalance, careerBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false, nbaFreeAgency: false, generatedPeople: false, positionProfiles: false });
 /** Everything automatic: recruitment, facilities, wage prepayments and sponsorship of the manager's club too. */
 const delegate = (state: SeasonState) => state.clubs.some(club => club.id === state.managedClubId) ? setSponsorshipDelegation(setPayrollDelegation(setFacilityDelegation(setEmploymentDelegation(state, true), true), true), true) : state;
 /** `share` of a club's budget booked to it in week 1 of season 1 (a test lever: one entry more at the ledger's head). */
@@ -69,8 +69,8 @@ describe('the spending balance option (format 89)', () => {
     expect(state.world!.spendingBalance).toBe(true);
     expect(usesSpendingBalance(state)).toBe(true);
     expect(career(world, 3, false).world!.spendingBalance).toBeUndefined();
-    expect(createSeason({ seed: 3, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, surplusSpending: false }).world!.spendingBalance).toBeUndefined();
-    expect(createSeason({ seed: 3, ...NEW_CAREER_SYSTEMS, playerDevelopment: false }).world?.spendingBalance).toBeUndefined();
+    expect(createSeason({ seed: 3, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false, surplusSpending: false }).world!.spendingBalance).toBeUndefined();
+    expect(createSeason({ seed: 3, ...NEW_CAREER_SYSTEMS, playerDevelopment: false, positionProfiles: false }).world?.spendingBalance).toBeUndefined();
     expect(() => createSeason({ seed: 3, world, spendingBalance: 'yes' as unknown as boolean })).toThrow(/spending balance setting/);
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 88; envelope.state.schemaVersion = 88;

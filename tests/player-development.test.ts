@@ -38,9 +38,12 @@ describe('the player development marker (format 101)', () => {
     expect(() => createSeason({ seed: 5, world: packWorld, playerDevelopment: 'yes' as unknown as boolean })).toThrow(/player development setting/);
     expect(parseSeason(serializeSeason(state)).world!.playerDevelopment).toBe(true);
     const envelope = JSON.parse(serializeSeason(state));
+    // Later markers (squad refresh, format 102) are removed so the check under test is the one that fails.
+    delete envelope.state.world.squadRefresh;
     envelope.formatVersion = 100; envelope.state.schemaVersion = 100;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/playerDevelopment.*format 101/);
-    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS, playerDevelopment: false })));
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 5, world: packWorld, managedClubId: 'acb-6', ...NEW_CAREER_SYSTEMS, playerDevelopment: false, managerOfferWithdrawal: false, nbaFreeAgency: false, generatedPeople: false, positionProfiles: false })));
+    delete older.state.world.squadRefresh;
     older.formatVersion = 100; older.state.schemaVersion = 100;
     expect(parseSeason(JSON.stringify(older)).world!.playerDevelopment).toBeUndefined();
   }, 120_000);

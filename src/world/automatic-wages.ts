@@ -85,7 +85,7 @@ export function automaticWageCap(state: SeasonState, clubId: string, seasonNumbe
  * passes, so the cap never stops a club fielding a team. Always true in careers without the economy balance.
  */
 export function automaticWageCheck(state: SeasonState, clubId: string): (seasonWage: number, seasons: number, startsSeason: number) => boolean {
-  // Format 103: an NBA club run automatically keeps any luxury tax within its cash (`nba-free-agency.ts`).
+  // Format 107: an NBA club run automatically keeps any luxury tax within its cash (`nba-free-agency.ts`).
   const taxCheck = nbaTaxCheck(state, clubId);
   if (!usesEconomyBalance(state)) return taxCheck;
   const shares = new Map<boolean, number | null>();
@@ -117,7 +117,7 @@ export function automaticWageCheck(state: SeasonState, clubId: string): (seasonW
 const NBA_HIGHEST_MINIMUM = nbaMinimumWage(40);
 
 /**
- * Format 103: whether a signing leaves every season's luxury tax within the club's cash (contracts, open offers and
+ * Format 107: whether a signing leaves every season's luxury tax within the club's cash (contracts, open offers and
  * released salary with the new wage, and the minimum salaries still needed for 13). Always true outside format-103 NBA
  * worlds.
  */

@@ -45,7 +45,7 @@ function review(state: SeasonState): SeasonState {
   const floor = keepNba ? Math.max(MIN_LIFECYCLE_POPULATION, NBA_MOVES_RULES.populationPerClub * world.clubs.length) : MIN_LIFECYCLE_POPULATION;
   if (keepNba && remainingPopulation > floor) {
     const contracted = new Set(effectiveContractsForSeason(state.employment, state.seasonNumber).map(contract => contract.playerId));
-    // Format 103: only players nobody would sign leave (below the NBA level, old, or unsigned all last season); better ones stay free agents for one more window.
+    // Format 107: only players nobody would sign leave (below the NBA level, old, or unsigned all last season); better ones stay free agents for one more window.
     const unsigned = population.filter(player => !contracted.has(player.id) && protectedThrough(state, player.id) === state.seasonNumber && nbaUnsignedLeaves(state, player.id))
       .map(player => ({ player, value: nbaValue(state, player.id) })).sort((left, right) => left.value - right.value || left.player.id.localeCompare(right.player.id, 'en'));
     for (const { player } of unsigned) {

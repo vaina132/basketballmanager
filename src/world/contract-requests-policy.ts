@@ -139,6 +139,6 @@ export function refusedContractPremium(context: ContractRequestContext, clubId: 
 /** The lowest annual wage this club can offer a player who remembers a refusal, in the wage steps contracts use. */
 export function refusedContractMinimum(context: ContractRequestContext, clubId: string, playerId: string, askingWage: number, wageStep: number): number {
   const premium = refusedContractPremium(context, clubId, playerId);
-  // Format 103: never more than the player's maximum NBA contract.
+  // Format 107: never more than the player's maximum NBA contract.
   return premium ? cappedNbaDemand(context, clubId, playerId, Math.ceil(askingWage * (100 + premium) / (100 * wageStep)) * wageStep) : 0;
 }

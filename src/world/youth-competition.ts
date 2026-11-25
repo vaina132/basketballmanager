@@ -1,6 +1,7 @@
 import type { WorldContext } from '../domain/world';
 import { clubHasAcademy, worldOf } from './career-world';
 import { prospectsWithExtras } from './extra-attributes';
+import { usesPositionProfiles } from './position-profiles';
 import { financeLedgerCount } from './finance-ledger';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonInjury, SeasonState, Standing } from '../domain/season';
@@ -12,6 +13,7 @@ import { developAcademyPlayer, emptyAcademyPoints, getAcademyProspect } from './
 import { academyAtBoundary } from './academy';
 import { isYouthOutcome } from './youth-history';
 import { generateYouthSquadProspects } from './academy-generation';
+import { academyTakenNames, peopleCountry, usesGeneratedPeople } from './generated-people';
 import { injuriesFromMatch, injuryRiskMap, isRecovering } from './health';
 import { memoizePure } from './pure-cache';
 import { roundKey } from './career-world';
@@ -122,12 +124,15 @@ export function getYouthPlayerStatus(context: YouthContext, playerId: string, on
 function supplement(state: SeasonState): { academy: SeasonAcademy; intakeIds: string[] } {
   let academy = state.academy;
   const intakeIds: string[] = [];
+  // Format 105: nationalities and names clear of every name in use (built once, then each new prospect's name joins).
+  const world = worldOf(state), taken = usesGeneratedPeople(world) ? academyTakenNames(world, academy) : null;
   for (const club of state.clubs) {
     // NBA step 4: NBA clubs have no youth team.
     if (!clubHasAcademy(worldOf(state), club.id)) continue;
     if (academy.intakes.some(entry => entry.clubId === club.id && entry.seasonNumber === state.seasonNumber && entry.source === 'youth-squad')) throw new Error('Supplement each youth squad at most once per season.');
     const current = academy.prospects.filter(prospect => prospect.clubId === club.id && getAcademyProspect({ ...state, academy }, prospect.player.id));
-    const prospects = prospectsWithExtras(worldOf(state), generateYouthSquadProspects(state.seed, club.id, state.seasonNumber, state.round, current, Math.max(0, YOUTH_SQUAD_SIZE - current.length)), state.date);
+    const shaped = usesPositionProfiles(world);
+    const prospects = prospectsWithExtras(world, generateYouthSquadProspects(state.seed, club.id, state.seasonNumber, state.round, current, Math.max(0, YOUTH_SQUAD_SIZE - current.length), taken ? { country: peopleCountry(world, club.id), taken } : undefined, shaped), state.date, shaped);
     const id = `academy-intake-${academy.intakes.length + 1}`;
     academy = { ...academy, prospects: [...academy.prospects, ...prospects], intakes: [...academy.intakes, { id, clubId: club.id, seasonNumber: state.seasonNumber, round: state.round, date: state.date, initial: false, source: 'youth-squad', prospectIds: prospects.map(prospect => prospect.player.id) }], points: { ...academy.points, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()])) }, focus: { ...academy.focus, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, 'balanced' as const])) } };
     intakeIds.push(id);

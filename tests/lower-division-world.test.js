@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testWorld } from './world-fixtures';
 import { advanceSeason, createSeason, managedSide, NEW_CAREER_SYSTEMS, rolloverSeason } from '../src/world/season';
+// The seeded scenarios below were found before format 105; its new names give generated coaches other styles, so they run without it (tests/generated-people.test.ts covers it).
 import { parseSeason, serializeSeasonCompact } from '../src/storage/season-storage';
 import { setAutoSubstitutions, simulateToEnd } from '../src/engine/match';
 import { setEmploymentDelegation } from '../src/world/employment';
@@ -60,7 +61,7 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     // rules of formats 74-80, 2 before AI clubs followed their president's youth objectives and youth injuries recurred,
     // 31 before the saved ideas level): a first-time club joins in season one, the relegated club returns in season two
     // (in place of that first-time club, which goes back down) and another first-time club comes up in season three.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 23, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 23, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, generatedPeople: false }), true);
     const generated = new Set(world.clubs.filter(club => club.id.startsWith('third-')).flatMap(club => club.players.map(player => player.id)));
     const finishSeason = () => {
       while (state.status === 'active') { state = play(state); if (state.round === 5) expect(roundTrip(state)).toEqual(state); }
@@ -138,7 +139,7 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     const world = lowerWorld();
     // Seed 9 (2 before the match flow, real coaches and European entry of formats 81-83): Alpine Stags go down in season
     // one and come back after one season.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 9, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 9, managedClubId: world.clubs[0].id, ...NEW_CAREER_SYSTEMS, generatedPeople: false }), true);
     const finish = () => { while (state.status === 'active') state = play(state); for (let step = 0; step < 120 && getMarketStartReason(state); step += 1) state = advanceMarket(state); };
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-alpine-stags']);
@@ -163,7 +164,7 @@ describe('next-division clubs built into the world (step 3.4d-2)', () => {
     // Seed 6 (2 before the head coach steering and economy balance of formats 86-87, 6 before the match flow, real coaches and European entry of formats 81-83, 33 before the new-career rules
     // of formats 74-80, 11 before the match calibration of sprint 4): the managed club finishes last in the second
     // division.
-    let state = setEmploymentDelegation(createSeason({ world, seed: 6, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS }), true);
+    let state = setEmploymentDelegation(createSeason({ world, seed: 6, managedClubId: 'w1-rhine-falcons', ...NEW_CAREER_SYSTEMS, generatedPeople: false }), true);
     while (state.status === 'active') state = play(state);
     expect(state.background.exchanges[0].leaving).toEqual(['w1-rhine-falcons']);
     expect(state.career.moves).toMatchObject([{ seasonNumber: 1, fromClubId: 'w1-rhine-falcons', reason: 'dismissed' }]);

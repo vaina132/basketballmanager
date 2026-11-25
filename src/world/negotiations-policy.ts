@@ -22,7 +22,7 @@ function roleBase(playerId: string, context: CareerPlayerContext, role: SquadRol
   const late = nbaLateFreeAgentMinimum(context, playerId), demand = late !== null && late < base ? late : base;
   // Format 93: a player paid on the NBA's scale asks a European club a European wage (`nba-moves.ts`).
   const european = nbaEuropeanDemand(context, playerId, clubId, demand);
-  // Format 103: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
+  // Format 107: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
   return cappedNbaDemand(context, clubId, playerId, european ?? demand);
 }
 

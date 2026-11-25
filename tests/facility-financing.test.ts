@@ -342,7 +342,7 @@ describe('arena work started at a season end', () => {
       { id: 'first', name: 'First division', country: 'Testland', tier: 1, clubIds: base.clubs.slice(0, 6).map(item => item.id), postseason: 'test-tier1-1' },
       { id: 'second', name: 'Second division', country: 'Testland', tier: 2, clubIds: base.clubs.slice(6).map(item => item.id), postseason: 'test-tier2-2' },
     ] };
-    let state = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, simpleFacilities: false }), true);
+    let state = setEmploymentDelegation(createSeason({ seed: 2, world, managedClubId: managed, ...NEW_CAREER_SYSTEMS, simpleFacilities: false, generatedPeople: false, positionProfiles: false }), true);
     while (state.status === 'active') state = advanceSeason(state.activeMatch ? { ...state, activeMatch: simulateToEnd(setAutoSubstitutions(state.activeMatch, managedSide(state), true)) } : state);
     const fixture = state.fixtures.find(item => item.result && item.date > state.date && item.homeClubId === managed)!;
     expect(fixture).toBeDefined();

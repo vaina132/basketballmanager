@@ -74,7 +74,7 @@ export function contractAskingWage(context: ContractRoleContext, clubId: string,
   // Format 93: a player paid on the NBA's scale asks a European club a European wage (`nba-moves.ts`).
   const european = nbaEuropeanDemand(context, playerId, clubId, wage);
   if (european !== null) return european;
-  // Format 103: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
+  // Format 107: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
   return isCapClub(context, clubId) ? Math.max(cappedNbaDemand(context, clubId, playerId, wage), nbaMinimumWage(context.date ? getCareerPlayerAge(context, playerId, context.date) : null)) : wage;
 }
 

@@ -73,7 +73,7 @@ describe('the format-103 NBA free agency rules', () => {
   it('asks other NBA clubs at most the mid-level exception in the offseason, then his minimum salary; his own club his full ask', () => {
     const offseason = { ...fresh, status: 'complete' as const }, opens = dateForRound(seasonRounds(fresh), 1);
     const later = { ...offseason, date: addMarketDays(opens, NBA_FREE_AGENCY_RULES.minimumAfterDays) };
-    const expensive = players.filter(({ id, clubId }) => contractForSeason(fresh.employment, id, 1)?.endsSeason === 1 && contractAskingWage(older, clubId, id) > NBA_MID_LEVEL);
+    const expensive = players.filter(({ id, clubId }) => contractForSeason(fresh.employment, id, 1)?.endsSeason === 1 && contractAskingWage(fresh, clubId, id) > NBA_MID_LEVEL);
     expect(expensive.length).toBeGreaterThan(0);
     for (const { id, clubId } of expensive) {
       const other = NBA_CLUB_IDS.find(item => item !== clubId)!;
@@ -81,8 +81,8 @@ describe('the format-103 NBA free agency rules', () => {
       expect(early).toBeLessThanOrEqual(NBA_MID_LEVEL);
       expect(early % 50_000).toBe(0);
       expect(contractAskingWage(later, other, id)).toBe(nbaMinimumWage(getCareerPlayerAge(later, id, later.date)));
-      expect(contractAskingWage(offseason, clubId, id)).toBeGreaterThan(NBA_MID_LEVEL);
-      expect(contractAskingWage(later, clubId, id)).toBeGreaterThan(NBA_MID_LEVEL);
+      expect(contractAskingWage(offseason, clubId, id)).toBe(contractAskingWage(fresh, clubId, id));
+      expect(contractAskingWage(later, clubId, id)).toBe(contractAskingWage(fresh, clubId, id));
       // In season, and in older careers, his ask is the same at every club.
       expect(contractAskingWage(fresh, other, id)).toBeGreaterThan(NBA_MID_LEVEL);
       expect(contractAskingWage({ ...older, status: 'complete' as const }, other, id)).toBeGreaterThan(NBA_MID_LEVEL);

@@ -235,6 +235,12 @@ export interface CareerWorld {
    * gains at high skill levels, earlier and faster decline, and occasional setbacks.
    */
   playerDevelopment?: true;
+  /**
+   * Format 103 (new careers with the spending balance, option `managerOfferWithdrawal`): the manager's pending offers that
+   * no longer fit his club's wage budget on the day the player answers are withdrawn the day before, as a recorded step,
+   * and the Inbox says which and why (`src/world/offer-withdrawals.ts`).
+   */
+  managerOfferWithdrawal?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

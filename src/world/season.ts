@@ -681,6 +681,12 @@ export interface SeasonSystems {
    * (`world.playerDevelopment`, `src/world/player-development.ts`). New careers only.
    */
   playerDevelopment?: boolean;
+  /**
+   * Format 103: the manager's pending offers that no longer fit his club's wage budget when the
+   * player answers are withdrawn, with an Inbox message (`world.managerOfferWithdrawal`, `src/world/offer-withdrawals.ts`).
+   * New careers with the spending balance only.
+   */
+  managerOfferWithdrawal?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -694,7 +700,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, managerOfferWithdrawal: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -740,6 +746,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.euroleagueJobs !== undefined && typeof options.euroleagueJobs !== 'boolean') throw new Error('Choose a valid EuroLeague jobs setting.');
   if (options.squadRefresh !== undefined && typeof options.squadRefresh !== 'boolean') throw new Error('Choose a valid squad refresh setting.');
   if (options.playerDevelopment !== undefined && typeof options.playerDevelopment !== 'boolean') throw new Error('Choose a valid player development setting.');
+  if (options.managerOfferWithdrawal !== undefined && typeof options.managerOfferWithdrawal !== 'boolean') throw new Error('Choose a valid offer withdrawal setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -812,6 +819,8 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   if (options.squadRefresh && !world.squadRefresh && (spendingBalance || world.spendingBalance)) world = { ...world, squadRefresh: true as const };
   // Format 101: realistic player development, in every real-data world.
   if (options.playerDevelopment && !world.playerDevelopment) world = { ...world, playerDevelopment: true as const };
+  // Format 103: the manager's offers that no longer fit are withdrawn before the reply, with the spending balance only.
+  if (options.managerOfferWithdrawal && !world.managerOfferWithdrawal && (spendingBalance || world.spendingBalance)) world = { ...world, managerOfferWithdrawal: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }
 

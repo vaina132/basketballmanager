@@ -185,7 +185,7 @@ describe('computer clubs always fill every staff role (format 84)', () => {
       expect(staffGaps(playToRollover(opening))).toEqual(['w0-atlantic-pilots coaches']);
       // The rule is stored as `coaching.fullStaff: true` from format 84, only with the wage pool.
       // Without the format-85 and format-87 world rules and format 86's steering head coaches, so the same file can be relabelled as formats 83 and 84.
-      const created = createSeason({ seed: 5, world, managedClubId: world.clubs[3]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false, coachSteering: false, economyBalance: false, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false });
+      const created = createSeason({ seed: 5, world, managedClubId: world.clubs[3]!.id, injuryMode: 'off', ...NEW_CAREER_SYSTEMS, neutralVenues: false, clubCountries: false, coachSteering: false, economyBalance: false, longCareers: false, careerBalance: false, cashBalance: false, squadRefresh: false, playerDevelopment: false, managerOfferWithdrawal: false });
       const plain = JSON.parse(serializeSeason(created));
       const variant = (version: number, coaching: object) => JSON.stringify({ ...plain, formatVersion: version, state: { ...plain.state, schemaVersion: version, coaching: { ...plain.state.coaching, ...coaching } } });
       expect(parseSeason(variant(84, {}))).toEqual(created);

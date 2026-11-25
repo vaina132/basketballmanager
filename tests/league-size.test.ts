@@ -122,7 +122,7 @@ describe('a full career in an eight-club league (14 matchdays)', () => {
   it('runs the offseason and opens season two with the same world', () => {
     expect(nextSeason.seasonNumber).toBe(2);
     expect(nextSeason.round).toBe(1);
-    expect(nextSeason.world).toBe(world);
+    expect(nextSeason.world).toBe(opening.world);  // the career's world (new careers add rule markers to the given world)
     expect(nextSeason.history[0]!.fixtures).toHaveLength(56);
   });
 

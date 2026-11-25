@@ -247,7 +247,8 @@ export interface DomesticDivisions {
 /** Format 105 (owner data check 24 November 2026): generated people have nationalities and unique names from larger lists in new real-club careers (`world.generatedPeople`, `src/world/generated-people.ts`). */
 /** Format 106 (provisional number): generated players are shaped like real players of their position in new real-data careers (`world.positionProfiles`, `src/world/position-profiles.ts`). */
 /** Format 107 (provisional number): NBA free agency keeps the league's stars in new careers with the NBA's money rules (`world.nbaFreeAgency`, `src/world/nba-free-agency.ts`). */
-export const SEASON_SCHEMA_VERSION = 107;
+/** Format 108 (owner decision 25 November 2026): academy practice follows the prospect's position in new careers with position profiles (`world.academyPositionTraining`, `src/world/academy-policy.ts`). */
+export const SEASON_SCHEMA_VERSION = 108;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

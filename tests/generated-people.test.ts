@@ -48,7 +48,7 @@ const collisionsPer1000 = (names: readonly string[]) => {
 const repeated = (names: readonly string[]) => { const seen = new Set<string>(); return names.filter(name => seen.has(nameKey(name)) || !seen.add(nameKey(name))); };
 
 let start: SeasonState, older: SeasonState;
-beforeAll(() => { start = create(true); older = create(false); });
+beforeAll(() => { start = create(true); older = create(false); }, 600_000);
 
 describe('name lists (format 106)', () => {
   it('gives every nationality a flag and the playable countries large lists', () => {

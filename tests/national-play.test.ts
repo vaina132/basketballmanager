@@ -106,8 +106,8 @@ describe('national windows in play (format 80)', () => {
 
   it('records injuries from national games: the player returns to his club injured (strict check included)', () => {
     // Seed 24 (11 before head coaches steered computer clubs, format 86): a player of the manager's club is injured with
-    // his national team in the November window, and so is a computer club's player.
-    const career = createSeason({ seed: 24, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS });
+    // his national team in the November window, and so is a computer club's player (seeded before format 106, so without it).
+    const career = createSeason({ seed: 24, world, managedClubId: world.clubs[4]!.id, ...NEW_CAREER_SYSTEMS, generatedPeople: false });
     const after = playUntil(career, state => state.round === 13);
     const national = after.injuries.filter(injury => isNationalFixtureId(injury.fixtureId));
     const own = national.find(injury => injury.clubId === after.managedClubId)!;
@@ -162,8 +162,8 @@ describe('national windows in play (format 80)', () => {
     // Seed 5: the November window records no injury at a full-world club, as an earlier format-80 save would hold. A
     // format-80 career played its matches on the plays-2 engine (the match flow of format 81 came later), so this career
     // keeps it on purpose.
-    // Nor did it have head coaches who steer computer clubs (format 86).
-    const played = playUntil(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false, coachSteering: false, careerBalance: false }), state => state.round === 13);
+    // Nor did it have head coaches who steer computer clubs (format 86), or the generated people of format 106.
+    const played = playUntil(createSeason({ seed: 5, world, managedClubId: world.clubs[0]!.id, ...NEW_CAREER_SYSTEMS, matchFlow: false, coachSteering: false, careerBalance: false, generatedPeople: false }), state => state.round === 13);
     expect(played.injuries.some(injury => isNationalFixtureId(injury.fixtureId))).toBe(false);
     const hired = acceptNationalOffer(offerNationalJob(played, 'nation-tur'), `national-offer-test-nation-tur-${played.date}`);
     // The earlier shape: results without injury records, the national record without earnings.

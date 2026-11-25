@@ -253,6 +253,12 @@ export interface CareerWorld {
    * (`src/world/generated-people.ts`, `src/data/generated-names.ts`).
    */
   generatedPeople?: true;
+  /**
+   * Format 106 (new real-data careers, option `positionProfiles`): generated players (academy prospects, NBA draft
+   * prospects) are shaped like real players of their position (`src/world/position-profiles.ts`), so league shooting
+   * profiles stay realistic as real players retire.
+   */
+  positionProfiles?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

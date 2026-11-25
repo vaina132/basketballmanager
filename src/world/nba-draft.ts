@@ -2,6 +2,7 @@ import type { DraftLottery, DraftProspect } from '../domain/draft';
 import type { Player, Position } from '../domain/types';
 import { countryName, nameCapacity, NAME_COUNTRIES } from '../data/people-names';
 import { attributesFor } from './lower-division';
+import { profiledAttributesFor } from './position-profiles';
 import { overallRating } from './overall-rating';
 import { withExtraAttributes } from './extra-attributes';
 import { realWorldWage } from './real-world';
@@ -106,8 +107,9 @@ export const draftProspectId = (seasonNumber: number, n: number) => `nba-draft-s
  * and the season like `generateLowerDivisionSquad`, so the save check derives the same class again.
  */
 export const generateDraftClass = memoizePure((key: string): readonly DraftProspect[] => {
-  const [seedText, seasonText, draftDay, extrasText, peopleText] = key.split('|');
-  const seed = Number(seedText), seasonNumber = Number(seasonText), extras = extrasText === '1', people = peopleText === 'g', year = Number(draftDay!.slice(0, 4));
+  const [seedText, seasonText, draftDay, extrasText, flags = ''] = key.split('|');
+  // Format 105 adds 'g' (generated people), format 106 'p' (position profiles).
+  const seed = Number(seedText), seasonNumber = Number(seasonText), extras = extrasText === '1', people = flags.includes('g'), profiles = flags.includes('p'), year = Number(draftDay!.slice(0, 4));
   const rules = NBA_DRAFT_RULES, totalWeight = rules.ages.reduce((sum, [, weight]) => sum + weight, 0);
   const usedNames = new Set<string>();
   const prospects: DraftProspect[] = [];
@@ -120,13 +122,15 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
     let age: number = rules.ages[0]![0];
     for (const [candidate, weight] of rules.ages) { if (ageRoll < weight) { age = candidate; break; } ageRoll -= weight; }
     const target = Math.round(rankRating(n) + value('rating', rules.ratingSpread * 2 + 1) - rules.ratingSpread);
-    const skills = attributesFor(target, position, key => key === 'stamina' ? rules.staminaShift + value('stamina', 3) - 1 : value(key, 3) - 1);
+    // Format 106 (`world.positionProfiles`): shaped like real NBA players of the position at the target rating, whose
+    // stamina already sits low at a rookie's rating (so no extra stamina shift).
+    const skills = profiles ? profiledAttributesFor(target, position, 'nba', key => value(key, 3) - 1) : attributesFor(target, position, key => key === 'stamina' ? rules.staminaShift + value('stamina', 3) - 1 : value(key, 3) - 1);
     const [low, high] = HEIGHTS[position], heightCm = low + value('height', high - low + 1);
     // Format 105 (`world.generatedPeople`): the nationality from the weighted international list; the name is given by
     // `draftClassProspects` from the world's names in use.
     if (people) {
       const nationality = draftNationality(seed, seasonNumber, n);
-      const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: 0 }) : skills;
+      const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: profiles ? null : 0 }) : skills;
       const positionIndex = POSITIONS.indexOf(position);
       const player: Player = {
         id, name: id, number: value('number', 100), position, heightCm, weightKg: 84 + positionIndex * 6 + value('weight', 10),
@@ -142,7 +146,8 @@ export const generateDraftClass = memoizePure((key: string): readonly DraftProsp
     for (let attempt = 0; attempt < 50 && (!name || usedNames.has(name)); attempt += 1) name = countryName(country, (value('name', nameCapacity(country)) + attempt * 17) % nameCapacity(country));
     name = name && !usedNames.has(name) ? name : `${countryName(country, n % nameCapacity(country)) ?? 'Prospect'} ${n}`;
     usedNames.add(name);
-    const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: 0 }) : skills;
+    // Format 106: the experience the rules assume for unknown minutes, as real players have it (`prospectsWithExtras`).
+    const attributes = extras ? withExtraAttributes({ id, position, heightCm, attributes: skills, age, minutes: profiles ? null : 0 }) : skills;
     const positionIndex = POSITIONS.indexOf(position);
     const player: Player = {
       id, name, number: value('number', 100), position, heightCm, weightKg: 84 + positionIndex * 6 + value('weight', 10),
@@ -181,12 +186,16 @@ export function draftClassNames(world: CareerWorld, seed: number, seasonNumber: 
 }
 
 const namedClasses = new WeakMap<CareerWorld, Map<string, readonly DraftProspect[]>>();
-/** The class of a career's season (see `generateDraftClass`); format-105 worlds (`world.generatedPeople`) name it with `draftClassNames`. */
+/**
+ * The class of a career's season (see `generateDraftClass`); format-105 worlds (`world.generatedPeople`) name it with
+ * `draftClassNames`; format-106 worlds (`world.positionProfiles`) shape its skills by position (names never depend on skills).
+ */
 export function draftClassProspects(seed: number, seasonNumber: number, draftDay: string, extras: boolean, world?: CareerWorld): readonly DraftProspect[] {
-  if (!world?.generatedPeople) return generateDraftClass(`${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}`);
+  const profiles = world?.positionProfiles ? 'p' : '';
+  if (!world?.generatedPeople) return generateDraftClass(`${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}${profiles ? `|${profiles}` : ''}`);
   let byWorld = namedClasses.get(world);
   if (!byWorld) { byWorld = new Map(); namedClasses.set(world, byWorld); }
-  const key = `${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}|g`, known = byWorld.get(key);
+  const key = `${seed}|${seasonNumber}|${draftDay}|${extras ? 1 : 0}|g${profiles}`, known = byWorld.get(key);
   if (known) return known;
   const names = draftClassNames(world, seed, seasonNumber);
   const named = Object.freeze(generateDraftClass(key).map((prospect, index) => ({ ...prospect, player: { ...prospect.player, name: names[index]! } })));

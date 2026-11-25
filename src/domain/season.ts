@@ -245,7 +245,8 @@ export interface DomesticDivisions {
 /** Format 101 (owner decision 24 November 2026): realistic player development in new real-data careers (`world.playerDevelopment`, `src/world/player-development.ts`). */
 /** Format 102 (owner decision 24 November 2026): rich clubs with a full squad refresh it in new careers with the spending balance (`world.squadRefresh`, `src/world/squad-refresh.ts`). */
 /** Format 105 (owner data check 24 November 2026): generated people have nationalities and unique names from larger lists in new real-club careers (`world.generatedPeople`, `src/world/generated-people.ts`). */
-export const SEASON_SCHEMA_VERSION = 105;
+/** Format 106 (provisional number): generated players are shaped like real players of their position in new real-data careers (`world.positionProfiles`, `src/world/position-profiles.ts`). */
+export const SEASON_SCHEMA_VERSION = 106;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

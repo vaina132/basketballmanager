@@ -17,6 +17,7 @@ import { youthCoachAssignments } from './youth-policy';
 import { getYouthPlayerStatus } from './youth-competition';
 import { clubHasAcademy, roundKey, seasonRounds, worldOf } from './career-world';
 import { prospectsWithExtras } from './extra-attributes';
+import { usesPositionProfiles } from './position-profiles';
 import type { CareerWorld } from '../domain/world';
 import { cachedCalculation } from './pure-cache';
 
@@ -32,7 +33,9 @@ function intake(state: SeasonState, initial: boolean): SeasonState {
     if (academy.intakes.some(record => record.clubId === club.id && record.seasonNumber === state.seasonNumber && !record.source)) continue;
     const active = academy.prospects.filter(prospect => prospect.clubId === club.id && !academy.graduates.some(graduate => graduate.prospectId === prospect.player.id)).length;
     const count = initial ? 3 : Math.min(2, Math.max(0, getAcademyCapacity(state) - active));
-    const prospects = prospectsWithExtras(worldOf(state), generateAcademyProspects(state.seed, club.id, state.seasonNumber, state.round, initial, count, taken ? { country: peopleCountry(world, club.id), taken } : undefined), state.date);
+    // Format 106: shaped like real players of their position, with the experience real players have.
+    const shaped = usesPositionProfiles(world);
+    const prospects = prospectsWithExtras(world, generateAcademyProspects(state.seed, club.id, state.seasonNumber, state.round, initial, count, taken ? { country: peopleCountry(world, club.id), taken } : undefined, shaped), state.date, shaped);
     academy = { ...academy, prospects: [...academy.prospects, ...prospects], intakes: [...academy.intakes, { id: `academy-intake-${academy.intakes.length + 1}`, clubId: club.id, seasonNumber: state.seasonNumber, round: state.round, date: state.date, initial, prospectIds: prospects.map(prospect => prospect.player.id) }], focus: { ...academy.focus, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, 'balanced' as const])) }, points: { ...academy.points, ...Object.fromEntries(prospects.map(prospect => [prospect.player.id, emptyAcademyPoints()])) } };
   }
   return academy === state.academy ? state : { ...state, academy };

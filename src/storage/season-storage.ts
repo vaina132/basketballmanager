@@ -155,7 +155,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105 | 106;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -3734,10 +3734,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 99 && Object.hasOwn(world, 'cashBalance')) fail('world.cashBalance', 'requires format 99 or later');
   // Format 100 (owner decision 24 November 2026): EuroLeague jobs are a rule of new careers only.
   if (version < 100 && Object.hasOwn(world, 'euroleagueJobs')) fail('world.euroleagueJobs', 'requires format 100 or later');
-  // Format 102 (owner decision 24 November 2026): the squad refresh is a rule of new careers only.
-  if (version < 102 && Object.hasOwn(world, 'squadRefresh')) fail('world.squadRefresh', 'requires format 102 or later');
   // Format 101 (owner decision 24 November 2026): realistic player development is a rule of new careers only.
   if (version < 101 && Object.hasOwn(world, 'playerDevelopment')) fail('world.playerDevelopment', 'requires format 101 or later');
+  // Format 102 (owner decision 24 November 2026): the squad refresh is a rule of new careers only.
+  if (version < 102 && Object.hasOwn(world, 'squadRefresh')) fail('world.squadRefresh', 'requires format 102 or later');
   // Format 103: the manager's offer withdrawal is a rule of new careers only.
   if (version < 103 && Object.hasOwn(world, 'managerOfferWithdrawal')) fail('world.managerOfferWithdrawal', 'requires format 103 or later');
   // Format 104 (owner request 24 November 2026): background squads that change are a rule of new careers only.
@@ -4147,8 +4147,10 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   // Format 81 guard: careers created with the dead balls of a real game (`plays-3`) need format 81 or later.
   if (Object.hasOwn(state, 'matchModel') && (state.matchModel === 'plays-3' ? version < 81 : state.matchModel !== 'plays-2' || version < 79)) fail('matchModel', 'must be plays-2 (format 79 or later) or plays-3 (format 81 or later)');
   // Format 105 (owner data check 24 November 2026): nationalities and unique names of generated people are a rule of new
-  // careers only. Checked last, so an older file's own format checks report first.
+  // careers only. Checked last with format 106, so an older file's own format checks report first.
   if (version < 105 && state.world && Object.hasOwn(state.world, 'generatedPeople')) fail('world.generatedPeople', 'requires format 105 or later');
+  // Format 106: generated players shaped by position are a rule of new careers only.
+  if (version < 106 && state.world && Object.hasOwn(state.world, 'positionProfiles')) fail('world.positionProfiles', 'requires format 106 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

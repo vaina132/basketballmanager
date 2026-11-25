@@ -105,8 +105,8 @@ describe('the manager offer withdrawal marker (format 103)', () => {
     envelope.formatVersion = 102; envelope.state.schemaVersion = 102;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/managerOfferWithdrawal.*format 103/);
     // A career without the marker still loads as an older format.
-    const older = JSON.parse(serializeSeason(career(false)));
-    delete older.state.world.backgroundSquads;  // format 104, a later rule
+    // Later rules (formats 104 and 105) are left out of the older career.
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 6, world: WORLD, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, managerOfferWithdrawal: false, backgroundSquads: false, generatedPeople: false })));
     older.formatVersion = 102; older.state.schemaVersion = 102;
     expect(parseSeason(JSON.stringify(older)).world!.managerOfferWithdrawal).toBeUndefined();
     expect(() => validateWorld({ ...WORLD, managerOfferWithdrawal: true })).toThrow(/managerOfferWithdrawal.*spending balance/);

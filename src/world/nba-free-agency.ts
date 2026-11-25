@@ -1,11 +1,12 @@
 import type { SeasonState } from '../domain/season';
-import type { WorldContext } from '../domain/world';
+import type { CareerWorld, WorldContext } from '../domain/world';
 import { isCapClub } from './club-roster-policy';
 import { NBA_CAP_2026_27 } from '../data/nba-payrolls';
 import { NBA_MID_LEVEL, nbaLuxuryTax, nbaMaximumWage, nbaMinimumWage, usdToCents } from './nba-cap';
 import { addMarketDays } from './market-policy';
 import { dateForRound } from './season';
-import { seasonRounds } from './career-world';
+import { isNbaClub, seasonRounds, worldOf } from './career-world';
+import { overallRating } from './overall-rating';
 import { getFinanceBalance } from './finance';
 import { nbaPayroll } from './nba-cap-policy';
 import { cashKeepShare, dividendTakeShare, usesCashBalance } from './cash-balance';
@@ -29,8 +30,9 @@ import { nbaValue } from './nba-moves';
  *   (NBA-only worlds keep 15 a club and remove unsigned players above that).
  *
  * Rules with the marker:
- * - **Asks within the maximum.** A player never asks an NBA club more than his maximum contract at his age (every
- *   demand: one season or longer, after a refused request, the club's role premium).
+ * - **Asks within the maximum and his level.** A player never asks an NBA club more than his maximum contract at his
+ *   age, nor more than NBA players of his overall rating earn (`levelPremium` above their median opening salary), in
+ *   every demand: one season or longer, after a refused request, the club's role premium.
  * - **Bird rights for stars.** Re-signing the club's own player rated `birdStarLevel` or more (Bird rights) may take the
  *   payroll past the owner's payroll ceiling up to the tax line (an owner who stays below the tax keeps his stars without
  *   paying it; owners who accept the tax already have ceilings above the line).
@@ -62,6 +64,10 @@ export const NBA_FREE_AGENCY_RULES = Object.freeze({
    * up to the first or second apron, 13-20 of 30 clubs paid the tax in seasons 2-5 (the real league: 7-9).
    */
   birdStarCeilingUsd: NBA_CAP_2026_27.taxLevelUsd,
+  /** [E] A player asks at most this much (%) above the median opening salary of NBA players of his overall rating... */
+  levelPremium: 20,
+  /** [E] ...within this many overall points. */
+  levelNeighbourhood: 2,
   /** [E] Days into the offseason window from which a free agent asks other clubs only his minimum salary. */
   minimumAfterDays: 3,
   /** [E] Releases a club makes in one window to sign a clearly better free agent. */
@@ -129,10 +135,46 @@ export function nbaDemandCap(context: NbaFreeAgencyContext, clubId: string | und
   if (!clubId || !usesNbaFreeAgency(context) || !isCapClub(context, clubId)) return null;
   let age: number | null = null;
   try { age = context.date ? getCareerPlayerAge(context, playerId, context.date) : null; } catch { age = null; }
-  const maximum = nbaMaximumWage(age);
+  // A player's ask follows his level today: at most what NBA players of his overall rating earn (opening salaries), with
+  // the room for role and term premiums.
+  const level = nbaLevelWage(context, playerId);
+  const maximum = level === null ? nbaMaximumWage(age) : Math.min(nbaMaximumWage(age), level);
   if (!midLevelAsk(context, clubId, playerId)) return maximum;
   const opensOn = dateForRound(seasonRounds(context), context.seasonNumber!);
   return context.date && context.date >= addMarketDays(opensOn, NBA_FREE_AGENCY_RULES.minimumAfterDays) ? nbaMinimumWage(age) : Math.min(maximum, MID_LEVEL_ASK);
+}
+
+const levelCurves = new WeakMap<CareerWorld, readonly (number | null)[]>();
+/**
+ * The most an NBA player asks at an overall rating (euro cents, wage steps): `levelPremium` above the median opening salary
+ * of NBA players within `levelNeighbourhood` points of it (widening until some are found), or null without NBA players.
+ * Without it, players whose ratings fell kept asking their opening salaries (measured: renewals at the $57.7M maximum
+ * for players rated 71-78, and 16 of 30 clubs over the tax line by season 4).
+ */
+function nbaLevelCurve(world: CareerWorld): readonly (number | null)[] {
+  let curve = levelCurves.get(world);
+  if (curve) return curve;
+  const rows: { rating: number; wage: number }[] = [];
+  for (const club of world.clubs) if (isNbaClub(world, club.id)) for (const player of club.players) {
+    const wage = world.wages[player.id];
+    if (wage !== undefined) rows.push({ rating: overallRating(player.attributes, player.position), wage });
+  }
+  const median = (values: number[]) => { const sorted = [...values].sort((a, b) => a - b); return sorted[Math.floor((sorted.length - 1) / 2)]!; };
+  const top = Math.max(-1, ...rows.map(row => row.rating)), rules = NBA_FREE_AGENCY_RULES;
+  curve = Array.from({ length: 100 }, (_, rating) => {
+    if (!rows.length) return null;
+    for (let width = rules.levelNeighbourhood; ; width += 1) {
+      const near = rows.filter(row => Math.abs(row.rating - Math.min(rating, top)) <= width).map(row => row.wage);
+      if (near.length) return Math.ceil(median(near) * (100 + rules.levelPremium) / 100 / 50_000) * 50_000;
+    }
+  });
+  levelCurves.set(world, curve);
+  return curve;
+}
+
+/** Format 103: the most a player asks at his overall rating today (null without NBA players). */
+export function nbaLevelWage(context: CareerPlayerContext, playerId: string): number | null {
+  return nbaLevelCurve(worldOf(context))[Math.max(0, Math.min(99, nbaValue(context, playerId)))] ?? null;
 }
 
 /** A demand limited by `nbaDemandCap` (unchanged without a cap). */

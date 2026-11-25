@@ -272,6 +272,12 @@ export interface CareerWorld {
    * and each skill's academy limit is the position's share of the same 21-point allowance.
    */
   academyPositionTraining?: true;
+  /**
+   * Format 109 (decided 25 November 2026 under the owner's delegation, reversible; new careers with academy position
+   * training and researched club money, option `secondDivisionBalance`): a player rated above his country's opening second
+   * division asks a lower-division club at least the top-division wage of his level (`src/world/second-division-balance.ts`).
+   */
+  secondDivisionBalance?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

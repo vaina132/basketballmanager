@@ -248,7 +248,8 @@ export interface DomesticDivisions {
 /** Format 106 (provisional number): generated players are shaped like real players of their position in new real-data careers (`world.positionProfiles`, `src/world/position-profiles.ts`). */
 /** Format 107 (provisional number): NBA free agency keeps the league's stars in new careers with the NBA's money rules (`world.nbaFreeAgency`, `src/world/nba-free-agency.ts`). */
 /** Format 108 (owner decision 25 November 2026): academy practice follows the prospect's position in new careers with position profiles (`world.academyPositionTraining`, `src/world/academy-policy.ts`). */
-export const SEASON_SCHEMA_VERSION = 108;
+/** Format 109 (decided 25 November 2026 under the owner's delegation): players good enough for the top division ask second-division clubs top-division wages in new careers with academy position training (`world.secondDivisionBalance`, `src/world/second-division-balance.ts`). */
+export const SEASON_SCHEMA_VERSION = 109;
 
 export interface SeasonState {
   schemaVersion: typeof SEASON_SCHEMA_VERSION;

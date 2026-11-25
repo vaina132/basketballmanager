@@ -24,6 +24,7 @@ import { benchWage, knownMoneySeason, moneyAt, REAL_ECONOMY_RULES, worldEconomy 
 import { refusedContractMinimum, refusedContractPremium } from './contract-requests-policy';
 import { contractRoleReason, offeredContractRole, roleWage } from './contract-roles';
 import { surplusWageRoom } from './surplus-spending';
+import { minimumSquadCeiling, usesSecondDivisionBalance } from './second-division-balance';
 
 export const EMPLOYMENT_BUDGET = 24_000_000;
 export const MIN_ROSTER_SIZE = 8;
@@ -378,7 +379,10 @@ export function playerContractQuoter(state: SeasonState, clubId = state.managedC
       // Format 96 (NBA step 12): a signing at the player's minimum salary needed for the 13 is always allowed, under the cap
       // as over it (with the owner's ceiling as the whole wages pool, a club short of players could otherwise afford no one).
       const minimumNeeded = size <= minimumRoster && (capRoute === 'minimum' || usesNbaBalance(state) && capMinimum !== undefined && seasonWage <= capMinimum);
-      const ordinary = capClub() && (resolving || minimumNeeded) ? Infinity : size <= minimumRoster && seasonWage <= reserveWage ? summary.minimumSquadBudget : summary.budget;
+      // Format 109: a cheap signing a club needs for its minimum squad fits within the save check's own allocation bound
+      // (`minimumSquadCeiling`), so a relegated club whose agreed wages passed its allocation can still field eight.
+      const cheapNeeded = size <= minimumRoster && seasonWage <= reserveWage;
+      const ordinary = capClub() && (resolving || minimumNeeded) ? Infinity : cheapNeeded ? Math.max(summary.minimumSquadBudget, usesSecondDivisionBalance(state) ? minimumSquadCeiling(state, clubId, year) : 0) : summary.budget;
       // Format 107: Bird rights keep a club's best players past its owner's ceiling (`nba-free-agency.ts`).
       const limit = capRoute === 'bird' && nbaBirdStar(state, playerId) ? Math.max(ordinary, NBA_BIRD_STAR_CEILING) : ordinary;
       // Format 107: released salary (dead money) counts against an NBA club's wage budget, as it counts for the tax.

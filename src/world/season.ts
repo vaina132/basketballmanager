@@ -48,7 +48,7 @@ import type { CareerWorld } from '../domain/world';
 import { nbaSchedule, nbaPostseasonSlotDay } from './nba-schedule';
 import { nbaCompetitionTables } from './competition-table';
 import type { NbaTables } from './nba-ranking';
-import { expectedRegularGames, fixtureRuleset, fullWorldClubs, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
+import { expectedRegularGames, fixtureRuleset, fullWorldClubs, hasLowerDivision, isMemberList, playsAtNeutralVenue, MAX_SEASON_ROUNDS, MAX_WORLD_CLUBS, MIN_WORLD_CLUBS, regularWorldRounds, seasonRounds, storedWorld, validateWorld, worldOf } from './career-world';
 import { createFixtureMatch, isPlayerEligible, preTipoffLineup, simulateToEnd } from '../engine/match';
 import { isCourtPosition } from '../engine/positions';
 import { INJURY_MODEL_2 } from '../domain/injuries';
@@ -717,6 +717,12 @@ export interface SeasonSystems {
    * (`world.academyPositionTraining`, `src/world/academy-policy.ts`). New careers with position profiles only.
    */
   academyPositionTraining?: boolean;
+  /**
+   * Format 109 (decided 25 November 2026 under the owner's delegation): players good enough for the top division ask
+   * second-division clubs top-division wages (`world.secondDivisionBalance`, `src/world/second-division-balance.ts`). New
+   * careers with academy position training, researched club money and a second division only.
+   */
+  secondDivisionBalance?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -730,7 +736,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, managerOfferWithdrawal: true, backgroundSquads: true, generatedPeople: true, positionProfiles: true, nbaFreeAgency: true, academyPositionTraining: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, managerOfferWithdrawal: true, backgroundSquads: true, generatedPeople: true, positionProfiles: true, nbaFreeAgency: true, academyPositionTraining: true, secondDivisionBalance: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -782,6 +788,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.positionProfiles !== undefined && typeof options.positionProfiles !== 'boolean') throw new Error('Choose a valid position profiles setting.');
   if (options.nbaFreeAgency !== undefined && typeof options.nbaFreeAgency !== 'boolean') throw new Error('Choose a valid NBA free agency setting.');
   if (options.academyPositionTraining !== undefined && typeof options.academyPositionTraining !== 'boolean') throw new Error('Choose a valid academy position training setting.');
+  if (options.secondDivisionBalance !== undefined && typeof options.secondDivisionBalance !== 'boolean') throw new Error('Choose a valid second-division balance setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -866,6 +873,9 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   if (options.nbaFreeAgency && !world.nbaFreeAgency && world.nba?.cap === 'nba-cap-1') world = { ...world, nbaFreeAgency: true as const };
   // Format 108: academy practice shaped by position, with position profiles only.
   if (options.academyPositionTraining && !world.academyPositionTraining && world.positionProfiles) world = { ...world, academyPositionTraining: true as const };
+  // Format 109: top-division wages for top-division players at lower-division clubs, with academy position training,
+  // researched club money and a second division only.
+  if (options.secondDivisionBalance && !world.secondDivisionBalance && world.academyPositionTraining && world.economy && hasLowerDivision(world)) world = { ...world, secondDivisionBalance: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }
 

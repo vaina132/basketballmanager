@@ -7,6 +7,7 @@ import { roleWage } from './contract-roles';
 import { nbaLateFreeAgentMinimum } from './nba-cap-policy';
 import { nbaEuropeanDemand } from './nba-moves';
 import { cappedNbaDemand } from './nba-free-agency';
+import { secondDivisionDemand } from './second-division-balance';
 
 const WAGE_STEP = 50_000;
 export const NEGOTIATION_TERM_PREMIUMS = [0, 5, 10] as const;
@@ -23,7 +24,8 @@ function roleBase(playerId: string, context: CareerPlayerContext, role: SquadRol
   // Format 93: a player paid on the NBA's scale asks a European club a European wage (`nba-moves.ts`).
   const european = nbaEuropeanDemand(context, playerId, clubId, demand);
   // Format 107: never more than the player's maximum NBA contract; less from other clubs in free agency (`nba-free-agency.ts`).
-  return cappedNbaDemand(context, clubId, playerId, european ?? demand);
+  // Format 109: a player good enough for the top division asks a lower-division club a top-division wage (`second-division-balance.ts`).
+  return secondDivisionDemand(context, clubId, playerId, cappedNbaDemand(context, clubId, playerId, european ?? demand));
 }
 
 /** Uniform development contract rule, independent of hidden abilities or invented preferences. */

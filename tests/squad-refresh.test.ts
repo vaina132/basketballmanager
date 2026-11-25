@@ -73,7 +73,7 @@ describe('the squad refresh marker (format 102)', () => {
     envelope.formatVersion = 101; envelope.state.schemaVersion = 101;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/squadRefresh.*format 102/);
     // A career without the marker still loads as an older format.
-    const older = JSON.parse(serializeSeason(createSeason({ seed: 4, world: WORLD, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, squadRefresh: false, managerOfferWithdrawal: false })));
+    const older = JSON.parse(serializeSeason(createSeason({ seed: 4, world: WORLD, managedClubId: MANAGED, ...NEW_CAREER_SYSTEMS, squadRefresh: false, managerOfferWithdrawal: false, backgroundSquads: false })));
     older.formatVersion = 101; older.state.schemaVersion = 101;
     expect(parseSeason(JSON.stringify(older)).world!.squadRefresh).toBeUndefined();
     expect(() => validateWorld({ ...WORLD, squadRefresh: true })).toThrow(/squadRefresh.*spending balance/);

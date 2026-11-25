@@ -106,6 +106,7 @@ describe('the manager offer withdrawal marker (format 103)', () => {
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/managerOfferWithdrawal.*format 103/);
     // A career without the marker still loads as an older format.
     const older = JSON.parse(serializeSeason(career(false)));
+    delete older.state.world.backgroundSquads;  // format 104, a later rule
     older.formatVersion = 102; older.state.schemaVersion = 102;
     expect(parseSeason(JSON.stringify(older)).world!.managerOfferWithdrawal).toBeUndefined();
     expect(() => validateWorld({ ...WORLD, managerOfferWithdrawal: true })).toThrow(/managerOfferWithdrawal.*spending balance/);

@@ -241,6 +241,12 @@ export interface CareerWorld {
    * and the Inbox says which and why (`src/world/offer-withdrawals.ts`).
    */
   managerOfferWithdrawal?: true;
+  /**
+   * Format 104 (owner request 24 November 2026, new careers with player development, option `backgroundSquads`):
+   * background clubs' squads develop, age, retire and are renewed at each season change, derived from the seed
+   * (`src/world/background-squads.ts`).
+   */
+  backgroundSquads?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

@@ -65,6 +65,6 @@ export function youthGrowth(state: SeasonState, playerId: string): PlayerGrowth 
     if (!last || !report || last.seasonNumber !== state.seasonNumber) return null;
     baseline = 'pointsBefore' in report ? report.pointsBefore : weeks.at(-2)?.players[playerId]?.pointsAfter ?? emptyAcademyPoints();
   }
-  const now = developAcademyPlayer(prospect, current), then = developAcademyPlayer(prospect, baseline);
+  const now = developAcademyPlayer(prospect, current, state.world), then = developAcademyPlayer(prospect, baseline, state.world);
   return difference(then.attributes, now.attributes, prospect.player.position, lastMatch ? 'last youth match' : 'last week');
 }

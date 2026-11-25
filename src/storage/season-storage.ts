@@ -142,7 +142,7 @@ import { fixturePlayerEvidence, summarizeSeniorHistory } from '../world/senior-h
 import { validateArchivedAppearances, validateSealedSeniorSummary, validateSeniorSummary } from './senior-history-validation';
 import { isSealedSeniorResult, isSealedYouthFixture, sealCompletedHistory, SEALED_HISTORY_FORMAT, seniorSealedThrough } from '../world/sealed-history';
 import { abilityShapeProblem } from '../world/extra-attributes';
-import { ACADEMY_GRADUATION_AGE, academyPointCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
+import { ACADEMY_GRADUATION_AGE, academySkillCap, developAcademyPlayer, emptyAcademyPoints } from '../world/academy-policy';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { staffFee } from '../world/economy';
 import { PACKED_SAVE_FORMAT, packSeasonForSave, unpackSavedSeason } from './save-packing';
@@ -156,7 +156,7 @@ export { MAX_SEASON_SAVE_BYTES } from './season-limits';
 export { SEASON_SCHEMA_VERSION } from '../domain/season';
 const FORMAT = 'basketball-manager-season';
 /** Every accepted season format; older formats are validated as written, then migrated to the current one. */
-type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105 | 106 | 107;
+type SeasonFormatVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79 | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 | 104 | 105 | 106 | 107 | 108;
 const SUPPORTED_FORMATS: readonly number[] = Array.from({ length: SEASON_SCHEMA_VERSION }, (_, index) => index + 1);
 /**
  * The first format that carries six facility levels, arena seats and the simple bank loan (`facilities-3`, `bank-1`).
@@ -1176,7 +1176,7 @@ function validateSealedAcademyWeeks(state: SeasonState, anchor: NonNullable<Seas
         const entry = record(player, location, outcome ? ['detail', 'clubId', 'focus', 'pointsAfter'] : Object.keys(player).filter(key => ['clubId', 'focus', 'pointsBefore', 'gains', 'coachingGains', 'pointsAfter', 'availability', 'facility'].includes(key)));
         if (!TRAINING_FOCUSES.includes(entry.focus as TrainingPlan['focus']) || prospect.clubId !== managed && entry.focus !== 'balanced') fail(`${location}.focus`, 'must retain a supported instruction for this club');
         const points = record(entry.pointsAfter, `${location}.pointsAfter`, TRAINING_ATTRIBUTES);
-        for (const key of TRAINING_ATTRIBUTES) number(points[key], `${location}.pointsAfter.${key}`, 0, academyPointCap(prospect.player.attributes[key]));
+        for (const key of TRAINING_ATTRIBUTES) number(points[key], `${location}.pointsAfter.${key}`, 0, academySkillCap(prospect.player, key, state.world));
         const earlier = previous.get(id), from = outcome ? undefined : (player as AcademyWeekFullPlayer).pointsBefore as Partial<TrainingPoints> | undefined;
         if (earlier && (from && earlier.index === index - 1 ? !sameData(from, earlier.points) : TRAINING_ATTRIBUTES.some(key => (from ?? player.pointsAfter)[key]! < earlier.points[key]))) fail(location, 'must continue the prospect\'s development from his previous kept report');
         previous.set(id, { index, points: player.pointsAfter });
@@ -1318,7 +1318,7 @@ function sealedAcademyReplay(replay: SeasonState, state: SeasonState, through: n
   for (const [index, graduate] of graduates.entries()) {
     const path = `academy.graduates[${index}]`, prospect = byId.get(graduate.prospectId), at = graduate.availableSince;
     if (!prospect || graduate.id !== `academy-graduate-${index + 1}` || graduate.clubId !== prospect.clubId || graduate.graduatedOn !== dateForRound(at.round, at.seasonNumber) || roundKey(at.seasonNumber, at.round) < roundKey(prospect.intakeSeason, prospect.intakeRound)) fail(path, 'must graduate a prospect of its academy on its recorded date');
-    if (!sameData(graduate.sourcePoints, academy.points[graduate.prospectId]) || !sameData(graduate.player, developAcademyPlayer(prospect, graduate.sourcePoints))) fail(path, 'must keep the prospect\'s developed points at graduation');
+    if (!sameData(graduate.sourcePoints, academy.points[graduate.prospectId]) || !sameData(graduate.player, developAcademyPlayer(prospect, graduate.sourcePoints, state.world))) fail(path, 'must keep the prospect\'s developed points at graduation');
     if (graduate.kind === 'age-out' ? at.round !== 1 || graduate.offerId !== null || graduate.contractId !== null || (playerAgeOnDate(prospect.dateOfBirth, graduate.graduatedOn) ?? 0) < ACADEMY_GRADUATION_AGE
       : graduate.kind !== 'promotion' || !state.employment.contracts.some(contract => contract.id === graduate.contractId && contract.playerId === graduate.prospectId && contract.clubId === graduate.clubId && contract.startsSeason === at.seasonNumber && contract.startsRound === at.round)) fail(path, 'must be an age-out at a season opening or an accepted promotion');
   }
@@ -4156,6 +4156,8 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 105 && state.world && Object.hasOwn(state.world, 'generatedPeople')) fail('world.generatedPeople', 'requires format 105 or later');
   // Format 106: generated players shaped by position are a rule of new careers only.
   if (version < 106 && state.world && Object.hasOwn(state.world, 'positionProfiles')) fail('world.positionProfiles', 'requires format 106 or later');
+  // Format 108 (owner decision 25 November 2026): academy practice shaped by position is a rule of new careers only.
+  if (version < 108 && state.world && Object.hasOwn(state.world, 'academyPositionTraining')) fail('world.academyPositionTraining', 'requires format 108 or later');
 }
 
 /** Validate every reference and committed round before replacing any live season. */

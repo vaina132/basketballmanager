@@ -265,6 +265,13 @@ export interface CareerWorld {
    * owner's ceiling for stars, falling asks for unsigned players, clubs making room for them, and departures only of players nobody signs.
    */
   nbaFreeAgency?: true;
+  /**
+   * Format 108 (owner decision 25 November 2026; new careers with position profiles, option `academyPositionTraining`):
+   * academy practice follows the prospect's position (`academySkillCap` and `academyShares` in
+   * `src/world/academy-policy.ts`): a balanced academy week splits its points by the position's real development shares,
+   * and each skill's academy limit is the position's share of the same 21-point allowance.
+   */
+  academyPositionTraining?: true;
   /** Every original player's gross season wage in euro cents: the club's cost, which payroll charges. */
   wages: Readonly<Record<string, number>>;
   finances: readonly ClubFinanceDefinition[];

@@ -71,7 +71,7 @@ export function buildYouthClubTeam(state: Pick<SeasonState, 'clubs' | 'academy' 
   if (!club) throw new Error('A youth fixture must use clubs in this league.');
   const numbers = new Set<number>();
   const players = state.academy.prospects.filter(prospect => prospect.clubId === clubId && getAcademyProspect(state, prospect.player.id)).map(prospect => {
-    const player = developAcademyPlayer(prospect, state.academy.points[prospect.player.id]!);
+    const player = developAcademyPlayer(prospect, state.academy.points[prospect.player.id]!, state.world);
     let number = player.number;
     if (numbers.has(number)) { number = 1; while (numbers.has(number)) number += 1; }
     numbers.add(number);

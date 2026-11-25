@@ -9,7 +9,7 @@ import type { TrainingFocus, TrainingPoints } from '../domain/training';
 import { playerAgeOnDate } from '../data/development-player-profiles';
 import { generateAcademyProspects } from './academy-generation';
 import { academyTakenNames, peopleCountry, usesGeneratedPeople } from './generated-people';
-import { ACADEMY_GRADUATION_AGE, ACADEMY_WEEKLY_POINTS, academyPointCap, developAcademyPlayer, emptyAcademyPoints, getAcademyCapacity, getAcademyProspect } from './academy-policy';
+import { ACADEMY_GRADUATION_AGE, ACADEMY_WEEKLY_POINTS, academyShares, academySkillCap, developAcademyPlayer, usesAcademyPositionTraining, emptyAcademyPoints, getAcademyCapacity, getAcademyProspect } from './academy-policy';
 import { submitInSeasonOffer, withdrawInSeasonOffer } from './recruitment';
 import { dateForRound } from './season';
 import { TRAINING_ATTRIBUTES, TRAINING_FOCUSES } from './training';
@@ -17,7 +17,7 @@ import { youthCoachAssignments } from './youth-policy';
 import { getYouthPlayerStatus } from './youth-competition';
 import { clubHasAcademy, roundKey, seasonRounds, worldOf } from './career-world';
 import { prospectsWithExtras } from './extra-attributes';
-import { usesPositionProfiles } from './position-profiles';
+import { splitByShares, usesPositionProfiles } from './position-profiles';
 import type { CareerWorld } from '../domain/world';
 import { cachedCalculation } from './pure-cache';
 
@@ -78,7 +78,7 @@ export function graduateAcademyProspect(state: SeasonState, playerId: string, ki
   const medical = kind === 'promotion' && state.youthCompetition?.enabledSince ? getYouthPlayerStatus(state, playerId) : null;
   if (medical?.injury) throw new Error('This academy player must recover before joining the senior squad.');
   const condition = medical?.condition ?? 100;
-  const graduate: AcademyGraduate = { id: `academy-graduate-${state.academy.graduates.length + 1}`, prospectId: playerId, player: developAcademyPlayer(prospect, sourcePoints), dateOfBirth: prospect.dateOfBirth, seasonWage: prospect.seasonWage, clubId: prospect.clubId, availableSince: { seasonNumber: state.seasonNumber, round: state.round }, graduatedOn: state.date, kind, sourcePoints, offerId, contractId, ...(medical ? { condition } : {}) };
+  const graduate: AcademyGraduate = { id: `academy-graduate-${state.academy.graduates.length + 1}`, prospectId: playerId, player: developAcademyPlayer(prospect, sourcePoints, state.world), dateOfBirth: prospect.dateOfBirth, seasonWage: prospect.seasonWage, clubId: prospect.clubId, availableSince: { seasonNumber: state.seasonNumber, round: state.round }, graduatedOn: state.date, kind, sourcePoints, offerId, contractId, ...(medical ? { condition } : {}) };
   if (Object.hasOwn(state.conditions, playerId) || Object.hasOwn(state.training.points, playerId)) throw new Error('A graduate must enter senior condition and development exactly once.');
   return { ...state, academy: { ...state.academy, graduates: [...state.academy.graduates, graduate] }, conditions: { ...state.conditions, [playerId]: condition }, training: { ...state.training, points: { ...state.training.points, [playerId]: emptyAcademyPoints() } } };
 }
@@ -135,8 +135,11 @@ export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
     const ordinaryPoints = competition ? 4 * availableDays : ACADEMY_WEEKLY_POINTS;
     const availability = competition ? { availableDays, conditionBefore: getYouthPlayerStatus(input, id, fromDate).condition, conditionAfter: getYouthPlayerStatus(input, id, toDate).condition } : undefined;
     const bonusTotal = Math.floor(ordinaryPoints * (coaches[prospect.clubId]?.bonusPercent ?? 0) / 100);
+    // Format 108 (`world.academyPositionTraining`): a balanced week follows how real players of the position develop.
+    const shares = focus === 'balanced' && usesAcademyPositionTraining(input.world) ? academyShares(prospect.player.position) : null;
     const allocate = (amount: number, target: TrainingPoints, offset: number) => {
       if (focus !== 'balanced') target[focus] = amount;
+      else if (shares) Object.assign(target, splitByShares(amount, shares, afterRound - 1 + offset));
       else { for (const key of TRAINING_ATTRIBUTES) target[key] = Math.floor(amount / TRAINING_ATTRIBUTES.length); for (let n = 0; n < amount % TRAINING_ATTRIBUTES.length; n += 1) target[TRAINING_ATTRIBUTES[(afterRound - 1 + offset + n) % TRAINING_ATTRIBUTES.length]!] += 1; }
     };
     allocate(ordinaryPoints, base, 0); allocate(bonusTotal, bonus, ordinaryPoints % TRAINING_ATTRIBUTES.length);
@@ -148,7 +151,7 @@ export function buildAcademyWeek(input: AcademyWeekCalculation): AcademyWeek {
     allocate(Math.abs(facilityPoints), facilityDesired, ordinaryPoints % TRAINING_ATTRIBUTES.length);
     if (facilitySign < 0) for (const key of TRAINING_ATTRIBUTES) facilityDesired[key] = -facilityDesired[key];
     for (const key of TRAINING_ATTRIBUTES) {
-      const cap = academyPointCap(prospect.player.attributes[key]);
+      const cap = academySkillCap(prospect.player, key, input.world);
       if (!Number.isInteger(before[key]) || before[key] < 0 || before[key] > cap) throw new Error('Academy development exceeds its supported limits.');
       const withoutCoach = Math.min(cap, before[key] + base[key]);
       const coached = Math.min(cap, withoutCoach + bonus[key]);

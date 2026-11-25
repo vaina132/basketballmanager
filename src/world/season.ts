@@ -712,6 +712,11 @@ export interface SeasonSystems {
    * careers in worlds with the NBA's money rules only.
    */
   nbaFreeAgency?: boolean;
+  /**
+   * Format 108 (owner decision 25 November 2026): academy practice follows the prospect's position
+   * (`world.academyPositionTraining`, `src/world/academy-policy.ts`). New careers with position profiles only.
+   */
+  academyPositionTraining?: boolean;
 }
 export interface SeasonOptions extends SeasonSystems {
   seed?: number; managedClubId?: string; injuryMode?: InjuryMode; manager?: ManagerProfile | null;
@@ -725,7 +730,7 @@ export const NEW_CAREER_SYSTEMS: Readonly<Required<SeasonSystems>> = Object.free
   scouts: true, fitness: true, physio: true, assistant: true, academy: true, youth: true, lifecycle: true, youthCompetition: true,
   facilities: true, relationships: true, board: true, commercial: true, boardFunding: true, boardConsequences: true, rivalries: true, facilityMaintenance: true, careerMoves: true, namingRights: true,
   media: true, presidents: true, staffing: true, simpleFacilities: true, wagePool: true, staffContracts: true, calmPlayingTime: true, injuryLengths: true, transferLists: true, scoutNetwork: true, matchPlays: true, matchFlow: true, nationalTeams: true, realCoaches: true, europeanEntry: true, fullStaff: true,
-  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, managerOfferWithdrawal: true, backgroundSquads: true, generatedPeople: true, positionProfiles: true, nbaFreeAgency: true,
+  neutralVenues: true, clubCountries: true, coachSteering: true, economyBalance: true, surplusSpending: true, spendingBalance: true, nba: true, nbaJobs: true, nbaTrades: true, longCareers: true, careerBalance: true, cashBalance: true, euroleagueJobs: true, squadRefresh: true, playerDevelopment: true, managerOfferWithdrawal: true, backgroundSquads: true, generatedPeople: true, positionProfiles: true, nbaFreeAgency: true, academyPositionTraining: true,
 });
 const SEASON_OPTION_KEYS = new Set(['seed', 'managedClubId', 'injuryMode', 'manager', 'world', ...Object.keys(NEW_CAREER_SYSTEMS)]);
 
@@ -776,6 +781,7 @@ export function createSeason(first?: number | SeasonOptions, ...positional: unkn
   if (options.generatedPeople !== undefined && typeof options.generatedPeople !== 'boolean') throw new Error('Choose a valid generated people setting.');
   if (options.positionProfiles !== undefined && typeof options.positionProfiles !== 'boolean') throw new Error('Choose a valid position profiles setting.');
   if (options.nbaFreeAgency !== undefined && typeof options.nbaFreeAgency !== 'boolean') throw new Error('Choose a valid NBA free agency setting.');
+  if (options.academyPositionTraining !== undefined && typeof options.academyPositionTraining !== 'boolean') throw new Error('Choose a valid academy position training setting.');
   if (options.world?.nba && !options.nba) throw new Error('The NBA is played with its own rules, in new careers only.');
   const staffContracts = !!(options.staffContracts && options.wagePool && options.staffing);
   if (options.calmPlayingTime !== undefined && typeof options.calmPlayingTime !== 'boolean') throw new Error('Choose a valid playing-time setting.');
@@ -858,6 +864,8 @@ function ruledWorld(options: SeasonOptions): CareerWorld {
   if (options.positionProfiles && !world.positionProfiles && world.domesticLeagues) world = { ...world, positionProfiles: true as const };
   // Format 107: NBA free agency that keeps the stars, in worlds with the NBA's money rules only.
   if (options.nbaFreeAgency && !world.nbaFreeAgency && world.nba?.cap === 'nba-cap-1') world = { ...world, nbaFreeAgency: true as const };
+  // Format 108: academy practice shaped by position, with position profiles only.
+  if (options.academyPositionTraining && !world.academyPositionTraining && world.positionProfiles) world = { ...world, academyPositionTraining: true as const };
   return neutral || countries || balanced || spending || spendingBalance || nbaJobs || nbaTrades || longCareers || careerBalance ? { ...world, ...(neutral ? { neutralVenues: true as const } : {}), ...(countries ? { nextDivisionCountries: true as const } : {}), ...(balanced ? { economyBalance: true as const } : {}), ...(spending ? { surplusSpending: true as const } : {}), ...(spendingBalance ? { spendingBalance: true as const } : {}), ...(nbaJobs ? { nbaJobs: true as const } : {}), ...(nbaTrades ? { nbaTrades: true as const } : {}), ...(longCareers ? { longCareers: true as const } : {}), ...(careerBalance ? { careerBalance: true as const } : {}) } : world;
 }
 

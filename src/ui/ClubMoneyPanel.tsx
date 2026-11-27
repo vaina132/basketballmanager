@@ -7,7 +7,7 @@ import { seasonLabel } from '../world/season'
 import { formatMoney } from './money-format'
 import { Icon } from './Icon'
 
-export const ECONOMY_BAND_LABELS: Readonly<Record<EconomyBand, string>> = { 'euroleague-top': 'EuroLeague top group', euroleague: 'EuroLeague', 'top-upper': 'Top division, upper half', nba: 'NBA', 'top-lower': 'Top division, lower half', second: 'Second division', third: 'Third division' }
+export const ECONOMY_BAND_LABELS: Readonly<Record<EconomyBand, string>> = { 'euroleague-top': 'Euro Elite League top group', euroleague: 'Euro Elite League', 'top-upper': 'Top division, upper half', nba: 'NAL', 'top-lower': 'Top division, lower half', second: 'Second division', third: 'Third division' }
 
 /** One reason in plain words; European competitions use the world's own names. */
 function reasonText(season: SeasonState, reason: EconomyChangeReason, band: EconomyBand): string {
@@ -15,7 +15,7 @@ function reasonText(season: SeasonState, reason: EconomyChangeReason, band: Econ
   if (reason === 'relegated') return 'Relegated'
   if (reason === 'band') return `Squad strength moved the club to ${ECONOMY_BAND_LABELS[band].toLowerCase()}`
   const [move, kind] = reason.split('-') as ['joined' | 'left', 'euroleague' | 'eurocup' | 'bcl']
-  const name = worldOf(season).europeanCompetitions?.find(competition => competition.kind === kind)?.name ?? { euroleague: 'EuroLeague', eurocup: 'EuroCup', bcl: 'Basketball Champions League' }[kind]
+  const name = worldOf(season).europeanCompetitions?.find(competition => competition.kind === kind)?.name ?? { euroleague: 'Euro Elite League', eurocup: 'Euro Challenge Cup', bcl: 'Continental Basketball Cup' }[kind]
   return `${move === 'joined' ? 'Entered' : 'Left'} the ${name}`
 }
 

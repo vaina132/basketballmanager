@@ -57,6 +57,7 @@ describe('player drawings', () => {
     expect(html).not.toContain('/photos/')
     const credits = renderToStaticMarkup(<CreditsDialog onClose={() => {}} />)
     expect(credits).not.toMatch(/Wikimedia|Player photos/)
-    expect(credits).toContain('data-credits="logos"')
+    expect(credits).toContain('data-credits="flags"')
+    expect(credits).not.toContain('data-credits="logos"')
   })
 })

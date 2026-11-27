@@ -1,5 +1,6 @@
 import type { Player, PlayerAttributes, SkillAttributes, Position, Team } from '../domain/types';
 import { packPlayerName } from './player-names';
+import { gameClub, gameCompetitionName } from './game-names';
 import { overallRating } from './performance-rating';
 import { withExtraAttributes } from './extra-attributes';
 
@@ -99,7 +100,13 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
   for (const player of players.values()) if (!pack.clubs.some(raw => isObject(raw) && raw.id === player.clubId && Array.isArray(raw.playerIds) && raw.playerIds.includes(player.id))) fail(`${player.name} has an inconsistent club membership`);
   // Real players appear under their close-sounding game names (owner decision, 27 November 2026).
   const checked = pack as unknown as DataPack;
-  return { ...checked, players: checked.players.map(player => { const name = packPlayerName(player.id, player.name); return name === player.name ? player : { ...player, name }; }) };
+  return {
+    ...checked,
+    players: checked.players.map(player => { const name = packPlayerName(player.id, player.name); return name === player.name ? player : { ...player, name }; }),
+    // Clubs, arenas and competitions under their game names too (owner decision, 27 November 2026).
+    clubs: checked.clubs.map(club => gameClub(club)),
+    competitions: checked.competitions.map(competition => { const name = gameCompetitionName(competition.id, competition.name); return name === competition.name ? competition : { ...competition, name }; }),
+  };
 }
 
 /** A competition's groups: top-level groups partition its clubs, and each parent's groups partition the parent's clubs. */

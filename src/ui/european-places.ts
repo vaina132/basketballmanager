@@ -26,10 +26,10 @@ export function placeLabel(place: EuropeanPlace): string {
   switch (place.type) {
     case 'licence': return 'Licence (permanent)'
     case 'multi-year': return `Multi-year place until ${seasonLabel(place.until!)}`
-    case 'route': return `EuroCup route · season ${place.route ?? 1} of ${EUROPEAN_ENTRY_RULES.routeMaxSeasons}`
+    case 'route': return `Euro Challenge Cup route · season ${place.route ?? 1} of ${EUROPEAN_ENTRY_RULES.routeMaxSeasons}`
     case 'wild-card': return 'Wild card · one season'
     case 'one-year': return 'One-year place'
-    case 'drop-down': return 'One-year place after the EuroLeague'
+    case 'drop-down': return 'One-year place after the Euro Elite League'
     case 'league': return 'League place · one season'
     case 'title-holder': return 'Title holder · one season'
     case 'invitation': return 'Invitation · one season'
@@ -43,17 +43,17 @@ export function placeReason(place: EuropeanPlace): string {
     case 'licence': case 'multi-year': return 'Place kept'
     case 'licence-back': return 'Back in a top division: place restored'
     case 'renewed': return 'Renewed after the review (score 60 or more)'
-    case 'route-kept': return 'Kept by reaching the EuroLeague playoffs'
-    case 'route-champion': return 'EuroCup champion'
-    case 'route-runner-up': return 'EuroCup runner-up (both route places were open)'
+    case 'route-kept': return 'Kept by reaching the Euro Elite League playoffs'
+    case 'route-champion': return 'Euro Challenge Cup champion'
+    case 'route-runner-up': return 'Euro Challenge Cup runner-up (both route places were open)'
     case 'wild-card': return 'Wild card by score'
     case 'licence-renewed': return 'Licence renewed for five seasons'
-    case 'drop-down': return 'Left the EuroLeague'
+    case 'drop-down': return 'Left the Euro Elite League'
     case 'country-quota': return place.rank ? `${ordinal(place.rank)} in the final league ranking` : 'Country place'
     case 'country-kept': return 'Country place kept'
     case 'quota-score': return 'Open country place, by score'
-    case 'title-holder': return 'BCL champion'
-    case 'invitation-drop': return 'Invitation after leaving the EuroCup'
+    case 'title-holder': return 'Continental Cup champion'
+    case 'invitation-drop': return 'Invitation after leaving the Euro Challenge Cup'
     case 'invitation-score': return 'Invitation by score'
     case 'size-fill': return 'Place filled to keep the competition full'
     case 'declined-higher': return 'Kept after declining a higher place'
@@ -64,14 +64,14 @@ const LOST: Record<LostEuropeanPlace['reason'], string> = {
   relegated: 'Relegated: no European place next season. A licence waits until the club is back in a top division.',
   unpaid: `Unpaid costs above ${EUROPEAN_ENTRY_RULES.unpaidShare * 100}% of the budget. Pay them off to be eligible again.`,
   ended: 'The place ended and was not renewed.',
-  'route-limit': `Three seasons on the EuroCup route is the most.`,
-  'route-playoffs': 'The EuroCup route place needs the EuroLeague playoffs to be kept.',
+  'route-limit': `Three seasons on the Euro Challenge Cup route is the most.`,
+  'route-playoffs': 'The Euro Challenge Cup route place needs the Euro Elite League playoffs to be kept.',
 }
 export const lostText = (reason: LostEuropeanPlace['reason']) => LOST[reason]
 
 const AIMS: Record<BoardEuropeanAim['kind'], string> = {
-  'euroleague-playoffs': 'Reach the EuroLeague playoffs', 'euroleague-play-in': 'Reach the EuroLeague Play-In', 'eurocup-quarter-finals': 'Reach the EuroCup quarter-finals',
-  'eurocup-eighth-finals': 'Reach the EuroCup eighth-finals', 'bcl-quarter-finals': 'Reach the BCL quarter-finals', 'bcl-round-of-16': 'Reach the BCL Round of 16', 'european-place': 'Earn a European place for next season',
+  'euroleague-playoffs': 'Reach the Euro Elite League playoffs', 'euroleague-play-in': 'Reach the Euro Elite League Play-In', 'eurocup-quarter-finals': 'Reach the Euro Challenge Cup quarter-finals',
+  'eurocup-eighth-finals': 'Reach the Euro Challenge Cup eighth-finals', 'bcl-quarter-finals': 'Reach the Continental Cup quarter-finals', 'bcl-round-of-16': 'Reach the Continental Cup Round of 16', 'european-place': 'Earn a European place for next season',
 }
 export const aimText = (aim: BoardEuropeanAim) => `${AIMS[aim.kind]}${aim.keep ? ' (to keep our place)' : ''}`
 
@@ -133,7 +133,7 @@ export function yourClubCard(season: SeasonState): YourClubCard | null {
   if (!checks[0]!.ok) fixes.push('Win promotion back to the top division.')
   if (!checks[1]!.ok) fixes.push('Clear unpaid costs (Club > Facilities & money).')
   if (!secure && !checks[2]!.ok) fixes.push('Expand the arena (Club > Facilities & money).')
-  if (!secure && score.europe < 140) fixes.push('Go far in Europe: winning the EuroCup is the direct route.')
+  if (!secure && score.europe < 140) fixes.push('Go far in Europe: winning the Euro Challenge Cup is the direct route.')
   if (!secure && score.domestic < 150) fixes.push('Finish higher in the league (the ranking after the playoffs counts).')
   const lastWildCard = lowestWildCard(season.europe?.decision)
   return { clubId, now, next, decided: !!decided, checks, score, lastWildCard, seatsNeeded, fixes }
@@ -146,7 +146,7 @@ export function lowestWildCard(decision: EuropeanPlacesDecision | undefined): nu
   return scores.length ? Math.min(...scores) : null
 }
 
-const TYPE_WORDS: Record<EuropeanPlace['type'], string> = { licence: 'licence', 'multi-year': 'multi-year place', route: 'EuroCup route place', 'wild-card': 'wild card', 'one-year': 'one-year place', 'drop-down': 'one-year place', league: 'league place', 'title-holder': 'title holder place', invitation: 'invitation' }
+const TYPE_WORDS: Record<EuropeanPlace['type'], string> = { licence: 'licence', 'multi-year': 'multi-year place', route: 'Euro Challenge Cup route place', 'wild-card': 'wild card', 'one-year': 'one-year place', 'drop-down': 'one-year place', league: 'league place', 'title-holder': 'title holder place', invitation: 'invitation' }
 
 /** Format 83: the Inbox's European messages: the places day's news, the manager's invitations and the money warning. */
 export function europeanInboxItems(season: SeasonState): InboxItem[] {
@@ -167,7 +167,7 @@ export function europeanInboxItems(season: SeasonState): InboxItem[] {
           : offer.outcome === 'declined' ? `${name} will give the place to the next club.` : offer.answered ? `You accepted the ${name} place.` : `Your assistant accepted the ${name} place.` })
     }
     if (decision.chosen.length) items.push({ id: `europe-wildcards-s${year}`, date: decision.date, category: 'club', target: 'europe', needsAction: false,
-      title: 'EuroLeague wild cards awarded',
+      title: 'Euro Elite League wild cards awarded',
       detail: decision.chosen.map(id => { const score = decision.wildCards.find(item => item.clubId === id); return `${clubName(season, id)} (score ${score ? scoreText(score) : '?'}${score ? ` · ${topReasons(score)}` : ''})` }).join('; ') + '.' })
     for (const lost of decision.lost.filter(item => item.clubId === clubId)) items.push({ id: `europe-lost-s${year}-${lost.competitionId}`, date: decision.date, category: 'club', target: 'europe', needsAction: false,
       title: `European place lost · ${competitionName(season, lost.competitionId)}`, detail: lostText(lost.reason) })
@@ -186,6 +186,6 @@ export function europeanInboxItems(season: SeasonState): InboxItem[] {
 
 /** A score's two biggest parts in words: "EuroCup final, 15,000 seats". */
 export function topReasons(score: WildCardScore): string {
-  const parts: [number, string][] = [[score.europe, 'European results'], [score.domestic, 'league finish'], [score.arena, 'arena'], [score.budget, 'budget'], [score.market, 'new market'], [score.history, 'past EuroLeague seasons']]
+  const parts: [number, string][] = [[score.europe, 'European results'], [score.domestic, 'league finish'], [score.arena, 'arena'], [score.budget, 'budget'], [score.market, 'new market'], [score.history, 'past Euro Elite League seasons']]
   return parts.filter(([value]) => value > 0).sort((a, b) => b[0] - a[0]).slice(0, 2).map(([, label]) => label).join(', ')
 }

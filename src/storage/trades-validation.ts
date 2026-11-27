@@ -40,7 +40,7 @@ const inSeason = (trade: Pick<EmploymentTrade, 'seasonNumber' | 'startsSeason'>)
 /** Format 94: the shape and calendar of `employment.trades` (each trade's terms are checked at its first contract). */
 export function validateTradeRecords(value: unknown, context: WorldContext, seasonNumber: number, round: number, status: SeasonState['status']): EmploymentTrade[] {
   if (value === undefined) return [];
-  if (!usesTrades(context)) fail('employment.trades', 'needs a world with NBA trades');
+  if (!usesTrades(context)) fail('employment.trades', 'needs a world with NAL trades');
   if (!Array.isArray(value) || value.length > 20_000) fail('employment.trades', 'must be a bounded list of completed trades');
   const world = worldOf(context), rounds = seasonRounds(context);
   let previous = 0;
@@ -57,7 +57,7 @@ export function validateTradeRecords(value: unknown, context: WorldContext, seas
     if (key < previous) fail(path, 'must keep chronological order');
     previous = key;
     if (during && trade.startsSeason === seasonNumber && status === 'complete' && trade.startsRound > round) fail(path, 'cannot come after the season');
-    if (!ids(trade.clubIds, 2, 2) || !(trade.clubIds as string[]).every(clubId => isNbaClub(world, clubId))) fail(`${path}.clubIds`, 'must name two different NBA clubs');
+    if (!ids(trade.clubIds, 2, 2) || !(trade.clubIds as string[]).every(clubId => isNbaClub(world, clubId))) fail(`${path}.clubIds`, 'must name two different NAL clubs');
     const clubIds = trade.clubIds as [string, string];
     if (!Array.isArray(trade.moves) || trade.moves.length < 2 || trade.moves.length > TRADE_RULES.maxPlayersPerSide * 2) fail(`${path}.moves`, 'must move one to three players each way');
     let firstSide = true;
@@ -120,8 +120,8 @@ export function validateTradesState(state: SeasonState, version: number): void {
   if (Object.hasOwn(state, 'trades') && version < TRADES_FORMAT) fail('trades', `requires format ${TRADES_FORMAT} or later`);
   if (Object.hasOwn(state.employment ?? {}, 'trades') && version < TRADES_FORMAT) fail('employment.trades', `requires format ${TRADES_FORMAT} or later`);
   const expected = usesTrades(state) && !!state.employment?.enabledSince;
-  if (Object.hasOwn(state, 'trades') !== expected) fail('trades', 'must be kept exactly in careers with NBA trades');
-  if (!expected) { if (state.employment?.trades) fail('employment.trades', 'needs a career with NBA trades'); return; }
+  if (Object.hasOwn(state, 'trades') !== expected) fail('trades', 'must be kept exactly in careers with NAL trades');
+  if (!expected) { if (state.employment?.trades) fail('employment.trades', 'needs a career with NAL trades'); return; }
   const journal = record(state.trades, 'trades', ['model', 'proposals']);
   if (journal.model !== TRADE_RULES.model || !Array.isArray(journal.proposals) || journal.proposals.length > 5_000) fail('trades', 'must retain a supported bounded offer journal');
   const employment = state.employment, trades = employment.trades ?? [], rounds = seasonRounds(state);
@@ -133,7 +133,7 @@ export function validateTradesState(state: SeasonState, version: number): void {
     const proposal = record(raw, path, ['id', 'seasonNumber', 'phase', 'round', 'proposedOn', 'answerOn', 'fromClubId', 'toClubId', 'sends', 'receives', 'status', 'settledOn', 'reason', 'tradeId']) as unknown as TradeProposal;
     if (proposal.id !== `trade-proposal-${index + 1}`) fail(`${path}.id`, 'must use sequential offer identities');
     if (!integer(proposal.seasonNumber, 1, state.seasonNumber) || proposal.phase !== 'season' && proposal.phase !== 'offseason' || !integer(proposal.round, 1, rounds)) fail(path, 'must identify its season and week');
-    if (typeof proposal.fromClubId !== 'string' || typeof proposal.toClubId !== 'string' || !isNbaClub(world, proposal.fromClubId) || !isNbaClub(world, proposal.toClubId) || proposal.fromClubId === proposal.toClubId) fail(path, 'must name two different NBA clubs');
+    if (typeof proposal.fromClubId !== 'string' || typeof proposal.toClubId !== 'string' || !isNbaClub(world, proposal.fromClubId) || !isNbaClub(world, proposal.toClubId) || proposal.fromClubId === proposal.toClubId) fail(path, 'must name two different NAL clubs');
     if (!ids(proposal.sends, 1, TRADE_RULES.maxPlayersPerSide) || !ids(proposal.receives, 1, TRADE_RULES.maxPlayersPerSide)) fail(path, 'must offer and ask for one to three players');
     if (!['pending', 'declined', 'agreed', 'completed', 'called-off', 'withdrawn'].includes(proposal.status) || proposal.settledOn !== null && typeof proposal.settledOn !== 'string' || proposal.reason !== null && typeof proposal.reason !== 'string' || proposal.tradeId !== null && typeof proposal.tradeId !== 'string') fail(path, 'must record a supported answer');
     const year = proposal.seasonNumber, season = proposal.phase === 'season';

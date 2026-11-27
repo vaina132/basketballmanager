@@ -45,7 +45,7 @@ export function SeasonCalendar({ season }: { season: SeasonState }) {
         const open = reserved.filter(entry => entry.date === date && !today.some(fixture => entry.competitionId ? fixture.competition === entry.competitionId : !fixture.competition && fixture.stage))
         // Format 80: the FIBA window's national games, and the manager's own national game.
         const fiba = nationalGames.filter(fixture => fixture.date === date), ownNational = fiba.find(fixture => fixture.homeTeamId === jobTeam || fixture.awayTeamId === jobTeam)
-        if (fiba.length) byCompetition.set('FIBA window', fiba.length)
+        if (fiba.length) byCompetition.set('International window', fiba.length)
         return { date, competitions: [...byCompetition], own: today.find(fixture => fixture.homeClubId === managedId || fixture.awayClubId === managedId), ownNational, reserved: [...new Set(open.map(entry => entry.name))] }
       }) }
     })

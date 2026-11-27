@@ -86,7 +86,7 @@ export function nbaSecondChanceRequirement(requirement: number, leaguePosition: 
 export function careerBalanceNote(context: WorldContext | undefined | null): string {
   if (!usesCareerBalance(context)) return '';
   const { maxFade, reliefPoints, reliefDays, reliefFloor } = CAREER_BALANCE_RULES;
-  const nba = isNbaOnlyWorld(context?.world) ? ` NBA clubs in the lower half of the league's record ask ${reliefPoints} points less of you every ${reliefDays / 7} weeks without a club, down to ${reliefFloor}.` : '';
+  const nba = isNbaOnlyWorld(context?.world) ? ` NAL clubs in the lower half of the league's record ask ${reliefPoints} points less of you every ${reliefDays / 7} weeks without a club, down to ${reliefFloor}.` : '';
   return ` A good name never fades more than ${maxFade} points below the reputation you left with.${nba}`;
 }
 
@@ -94,7 +94,7 @@ export function careerBalanceNote(context: WorldContext | undefined | null): str
 export function balancedTargetText(): string {
   const { bestRate, worstRate, nbaBestRate, nbaWorstRate, margin, ambitionStep } = CAREER_BALANCE_RULES;
   const share = (rate: number) => Math.round((rate - margin) * 100);
-  return `The target follows the squad's rank in its league: about ${share(bestRate)}% of counted games for the strongest squad, falling evenly to about ${share(worstRate)}% for the weakest (${share(nbaBestRate)}% to ${share(nbaWorstRate)}% in the NBA), moved by ${Math.round(ambitionStep * 100)} points for each point of the president's ambition above or below the middle`;
+  return `The target follows the squad's rank in its league: about ${share(bestRate)}% of counted games for the strongest squad, falling evenly to about ${share(worstRate)}% for the weakest (${share(nbaBestRate)}% to ${share(nbaWorstRate)}% in the NAL), moved by ${Math.round(ambitionStep * 100)} points for each point of the president's ambition above or below the middle`;
 }
 
 /** Plain-English results review rule for careers with the balance (format 98). */

@@ -4,7 +4,7 @@ import type { MatchState, Player, Position, Side, Team } from '../domain/types';
 import type { CareerWorld } from '../domain/world';
 import { NATIONAL_TEAMS, NATIONALITY_ALIASES, QUALIFIER_GROUPS_2026, nationalPersonName } from '../data/national-teams';
 import { createFixtureMatch, simulateToEnd } from '../engine/match';
-import { NATIONAL_RULES, nationalAwayDays, nationalTournamentDays, nationalTournamentName, nationalWindowDays, nationalWindowSaturday } from './national-calendar';
+import { legacyNationalTournamentName, NATIONAL_RULES, nationalAwayDays, nationalTournamentDays, nationalTournamentName, nationalWindowDays, nationalWindowSaturday } from './national-calendar';
 import { addCalendarDays } from './competition-calendar';
 import { isNbaClub, worldOf } from './career-world';
 import { createSeasonInjury, injuryRiskMap, isRecovering } from './health';
@@ -100,8 +100,13 @@ export function groupFixtures(competitionId: string, group: NationalGroup, seaso
 /** A season's qualifiers from its groups. */
 export function qualifierCompetition(seasonNumber: number, groups: NationalGroup[]): NationalCompetition {
   const id = `nq-s${seasonNumber}`;
-  const name = seasonNumber === 1 ? 'World Cup 2027 European Qualifiers · Second round' : `${nationalTournamentName(seasonNumber).replace(/ \(.*\)$/u, '')} European Qualifiers`;
+  const name = seasonNumber === 1 ? 'World Championship 2027 European Qualifiers · Second round' : `${nationalTournamentName(seasonNumber).replace(/ \(.*\)$/u, '')} European Qualifiers`;
   return { id, seasonNumber, kind: 'qualifiers', name, groups, fixtures: groups.flatMap(group => groupFixtures(id, group, seasonNumber)) };
+}
+
+/** The qualifiers' name saved careers from before 27 November 2026 recorded. */
+export function legacyQualifierName(seasonNumber: number): string {
+  return seasonNumber === 1 ? 'World Cup 2027 European Qualifiers · Second round' : `${legacyNationalTournamentName(seasonNumber).replace(/ \(.*\)$/u, '')} European Qualifiers`;
 }
 
 /** The national teams, coaches and season one's qualifiers of a new career. */

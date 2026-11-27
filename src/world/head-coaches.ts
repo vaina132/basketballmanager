@@ -1,4 +1,5 @@
 import { COACH_ATTRIBUTES, type CoachAttribute, type CoachAttributes, type HeadCoach, type ManagerCoachSeason, type SeasonCoaches } from '../domain/coaches';
+import { gamePersonName } from './game-names';
 import type { BoardRestart } from '../domain/board';
 import type { ManagerProfile } from '../domain/manager';
 import type { SeasonState } from '../domain/season';
@@ -122,7 +123,8 @@ export function coachWorld(world: CareerWorld): CoachWorld {
   // Format 105: name keys of every name in use (the world's reserved names include every real coach).
   const people = usesGeneratedPeople(world) ? new Set(reservedNames(world)) : null;
   const name = (country: string | null, key: string) => people ? generatedPerson(country, key, 'coach', people) : generatedName(country, key, taken);
-  const real = (coach: RealCoach) => { if (!coaches.has(coach.id)) coaches.set(coach.id, estimateCoach(coach.id, coach, coach.level, world.startDate)); return coaches.get(coach.id)!; };
+  // Real coaches appear under their game names (owner decision, 27 November 2026); ratings still come from the real facts.
+  const real = (coach: RealCoach) => { if (!coaches.has(coach.id)) coaches.set(coach.id, { ...estimateCoach(coach.id, coach, coach.level, world.startDate), name: gamePersonName(coach.name) }); return coaches.get(coach.id)!; };
   for (const club of world.clubs) {
     // NBA step 10 (format 91): NBA clubs of an NBA career start with their real head coaches.
     const nbaPost = nbaJobs && isNbaClub(world, club.id) ? REAL_NBA_COACH_POSTS.find(item => item.teamId === club.id) : undefined;

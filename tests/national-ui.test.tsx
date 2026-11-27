@@ -20,7 +20,7 @@ describe('national team screens (format 80)', () => {
 
   it('shows the groups and games in Competitions > National teams', () => {
     const html = renderToStaticMarkup(<NationalWorkspace season={start} />);
-    expect(html).toContain('World Cup 2027 European Qualifiers');
+    expect(html).toContain('World Championship 2027 European Qualifiers');
     expect(html).toContain('Group J');
     expect(html).toContain('Next games: 26 Nov 2026 and 28 Nov 2026.');
     expect((html.match(/data-national-fixture=/g) ?? []).length).toBe(48);

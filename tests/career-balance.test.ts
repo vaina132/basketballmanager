@@ -157,7 +157,7 @@ describe('a way back into NBA jobs in a world of the NBA alone (format 98)', () 
     expect(isNbaOnlyWorld(worldFromPack(nbaPack([SPAIN]), ['acb', 'nba']))).toBe(false);
     expect(isNbaOnlyWorld(worldFromPack(economyPack([SPAIN]), 'acb'))).toBe(false);
     for (const [clubId, objective] of Object.entries(complete.board.mandates[0]!.clubs)) expect(objective.targetWins).toBe(Math.ceil(objective.games * balancedWinRate(objective.resourceRank, 30, presidentTraits(world, clubId), true)));
-    expect(careerBalanceNote(complete)).toMatch(/NBA clubs in the lower half/);
+    expect(careerBalanceNote(complete)).toMatch(/NAL clubs in the lower half/);
   });
 
   it('opens the weakest records\' NBA jobs to a dismissed manager after a wait; older careers never do', () => {

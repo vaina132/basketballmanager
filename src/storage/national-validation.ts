@@ -3,7 +3,7 @@ import type { SeasonState } from '../domain/season';
 import { NATIONAL_TEAMS } from '../data/national-teams';
 import { worldOf } from '../world/career-world';
 import { addCalendarDays } from '../world/competition-calendar';
-import { monthlyNationalSalary, NATIONAL_MODEL, qualifierCompetition, usesNationalTeams } from '../world/national';
+import { monthlyNationalSalary, NATIONAL_MODEL, legacyQualifierName, qualifierCompetition, usesNationalTeams } from '../world/national';
 import { NATIONAL_RULES, nationalTournamentDays } from '../world/national-calendar';
 import { validateMatchState } from './validate-match';
 import { isMatchInjuryKind } from '../domain/injuries';
@@ -122,7 +122,7 @@ export function validateNationalShape(value: unknown, state: SeasonState, versio
     if (competition.kind === 'qualifiers') {
       // The qualifier schedule follows from the groups exactly.
       const expected = qualifierCompetition(year, competition.groups as NationalCompetition['groups']);
-      if (competition.id !== expected.id || competition.name !== expected.name || competition.groups.length !== 4 || members.size !== NATIONAL_TEAMS.length || !same(fixtures.map(fixture => ({ ...fixture, result: null })), expected.fixtures)) fail(path, 'must follow the qualifier schedule of its groups');
+      if (competition.id !== expected.id || (competition.name !== expected.name && competition.name !== legacyQualifierName(year)) || competition.groups.length !== 4 || members.size !== NATIONAL_TEAMS.length || !same(fixtures.map(fixture => ({ ...fixture, result: null })), expected.fixtures)) fail(path, 'must follow the qualifier schedule of its groups');
     } else {
       const days = nationalTournamentDays(year);
       // Drawn when the qualifiers end; played day by day in the offseason (the manager's team) or at the season change.

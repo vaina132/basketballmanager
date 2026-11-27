@@ -1,4 +1,5 @@
 import type { CareerWorld } from '../domain/world';
+import { gamePersonName } from './game-names';
 import type { SeasonAcademy } from '../domain/academy';
 import type { SeasonState } from '../domain/season';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY } from '../data/staff-directory';
@@ -75,7 +76,8 @@ export function academyTakenNames(world: CareerWorld, academy: SeasonAcademy): S
 }
 
 /** Whether a president is generated (the real-people list names nobody else for the club). */
-const generatedPresident = (clubId: string, name: string) => realClubPerson(clubId, 'president')?.name !== name;
+// A real president keeps the real name in careers from before 27 November 2026 and the game name since.
+const generatedPresident = (clubId: string, name: string) => { const real = realClubPerson(clubId, 'president')?.name; return real !== name && (real === undefined || gamePersonName(real) !== name); };
 
 /**
  * The opening world of a format-105 career: next-division squads and generated presidents named again with a

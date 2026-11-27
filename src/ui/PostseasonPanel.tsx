@@ -5,7 +5,7 @@ import { worldOf } from '../world/career-world'
 import './postseason-panel.css'
 
 const STAGES: Record<PostseasonSeriesState['stage'], string> = { qualifying: 'Qualifying', 'play-in': 'Play-in', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-finals', 'semi-final': 'Semi-finals', 'third-place': 'Third place', final: 'Final', 'play-out': 'Play-outs' }
-const NBA_STAGES: Partial<Record<PostseasonSeriesState['stage'], string>> = { 'play-in': 'Play-in', 'round-of-16': 'First round', 'quarter-final': 'Conference semi-finals', 'semi-final': 'Conference finals', final: 'NBA Finals' }
+const NBA_STAGES: Partial<Record<PostseasonSeriesState['stage'], string>> = { 'play-in': 'Play-in', 'round-of-16': 'First round', 'quarter-final': 'Conference semi-finals', 'semi-final': 'Conference finals', final: 'NAL Finals' }
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 

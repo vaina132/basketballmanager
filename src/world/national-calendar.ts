@@ -75,6 +75,14 @@ export function nationalPausedWeeks(seasonNumber: number, rounds: number, weeks:
 
 /** The summer tournament's name: a simple repeating cycle from the real 2027 World Cup (the game's own simplification). */
 export function nationalTournamentName(seasonNumber: number): string {
+  // Game names (owner decision, 27 November 2026): no trademarked tournament names.
+  const year = seasonYear(seasonNumber) + 1;
+  if (year === 2027) return 'World Championship 2027 (Qatar)';
+  return year % 2 === 0 ? `Summer Games ${year}` : year % 4 === 3 ? `World Championship ${year}` : `European Championship ${year}`;
+}
+
+/** The tournament names saved careers from before 27 November 2026 recorded. */
+export function legacyNationalTournamentName(seasonNumber: number): string {
   const year = seasonYear(seasonNumber) + 1;
   if (year === 2027) return 'World Cup 2027 (Qatar)';
   return year % 2 === 0 ? `Olympic Games ${year}` : year % 4 === 3 ? `World Cup ${year}` : `EuroBasket ${year}`;

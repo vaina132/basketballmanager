@@ -1,4 +1,4 @@
-﻿/** Deterministic basketball rules: FIBA-2024 by default, the NBA's when a match records `ruleset` (src/engine/rulesets.ts). Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
+﻿/** Deterministic basketball rules: FIBA-2024 by default, the NAL's when a match records `ruleset` (src/engine/rulesets.ts). Probability and fatigue parameters remain uncalibrated; injury rates follow research (sprint 4). */
 import { FICTIONAL_AWAY, FICTIONAL_HOME } from '../data/fictional-teams';
 import type { CoachRotation, CourtPoint, CourtPosition, CourtScene, EngineVersion, InjuryMode, MatchEvent, MatchState, Player, PlayerStats, PlayModel, Position, PossessionPlay, Side, SkillAttributes, Tactics, Team } from '../domain/types';
 import { nextRandom, normalizeSeed } from './random';
@@ -844,7 +844,7 @@ function initializeMatch(seed: number, engineVersion: EngineVersion, home: Team,
   if (shortSide) { finishDefault(state, shortSide); return state; }
   if (engineVersion === 'possession-3') state.possessionPlay = createPossessionPlay(state);
   const scene = state.possessionPlay ? settledScene(state.possessionPlay) : setupScene(state, state.possession, state.lineups[state.possession][0]!);
-  emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. ${isNba(rulesOf(state)) ? 'NBA rules.' : 'FIBA-2024 exhibition rules subset.'}`, scene }); return state;
+  emit(state, { type: 'tipoff', side: state.possession, text: `${state[state.possession].name} win the opening tip. ${isNba(rulesOf(state)) ? 'NAL rules.' : 'FIBA-2024 exhibition rules subset.'}`, scene }); return state;
 }
 
 /** Existing exhibition construction remains stable for both supported engines. */
@@ -898,7 +898,7 @@ export function createFixtureMatch(seed: number, home: Team, away: Team, options
   }
   if (options.playModel !== undefined && options.playModel !== 'plays-2' && options.playModel !== 'plays-3') throw new Error('Choose a supported play model.');
   if (options.ruleset !== undefined && !isRulesetId(options.ruleset)) throw new Error('Choose supported competition rules.');
-  if (options.ruleset !== undefined && isNba(rulesOf(options)) && !options.playModel) throw new Error('The NBA rules are played with the play model.');
+  if (options.ruleset !== undefined && isNba(rulesOf(options)) && !options.playModel) throw new Error('The NAL rules are played with the play model.');
   if (options.computerCoach !== undefined && (!options.playModel || !Array.isArray(options.computerCoach) || options.computerCoach.some(side => side !== 'home' && side !== 'away'))) throw new Error('Computer coaches need the play model and must name teams.');
   if (options.slots !== undefined) {
     if (options.slots === null || typeof options.slots !== 'object' || Array.isArray(options.slots) || Object.keys(options.slots).some(side => side !== 'home' && side !== 'away')) throw new Error('Fixture circles must name a team.');

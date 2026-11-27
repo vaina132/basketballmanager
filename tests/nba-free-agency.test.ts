@@ -165,7 +165,7 @@ describe('one automatic season and offseason of the NBA with Spain', () => {
     const inbox = getInboxItems({ ...offseason, managedClubId: losing }).filter(item => item.id.startsWith('nba-'));
     expect(inbox.length).toBe(nbaDeparturesFrom(offseason, losing).length);
     expect(inbox.length).toBeGreaterThan(0);
-    expect(inbox[0]!.title).toMatch(/signs in the NBA/);
+    expect(inbox[0]!.title).toMatch(/signs in the NAL/);
   });
 
   it('gives NBA-level players contested by both sides to the NBA', () => {

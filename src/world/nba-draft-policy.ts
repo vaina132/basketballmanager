@@ -74,8 +74,8 @@ export function pendingDraftDay(state: Pick<SeasonState, 'seasonNumber' | 'marke
 export function draftStartReason(state: SeasonState): string | null {
   if (!usesNbaDraft(state) || !state.draft) return null;
   const entry = draftClassOf(state, state.seasonNumber);
-  if (!entry) return `The NBA draft is on ${draftDayOf(state)}. Continue the offseason to reach draft day.`;
-  if (!isDraftComplete(entry)) return entry.order[entry.picks.length] === state.managedClubId ? 'Your club is on the clock in the NBA draft. Make your pick, or let your assistant pick.' : 'The NBA draft is still under way.';
+  if (!entry) return `The NAL draft is on ${draftDayOf(state)}. Continue the offseason to reach draft day.`;
+  if (!isDraftComplete(entry)) return entry.order[entry.picks.length] === state.managedClubId ? 'Your club is on the clock in the NAL draft. Make your pick, or let your assistant pick.' : 'The NAL draft is still under way.';
   return null;
 }
 
@@ -86,7 +86,7 @@ export function draftStartReason(state: SeasonState): string | null {
 export function openDraft(state: SeasonState): SeasonState {
   if (!usesNbaDraft(state) || !state.draft || draftClassOf(state, state.seasonNumber)) return state;
   const standings = draftStandings(seasonGames(state), state.seasonNumber);
-  if (!standings) throw new Error('The draft needs the NBA\'s final standings.');
+  if (!standings) throw new Error('The draft needs the NAL\'s final standings.');
   const lottery = drawLottery(state.seed, state.seasonNumber, standings.lottery);
   const prospects = draftClassProspects(state.seed, state.seasonNumber, state.date, storesExtraAttributes(worldOf(state)), worldOf(state));
   const europeans = europeanProspects(state);
@@ -200,7 +200,7 @@ function makePick(state: SeasonState, entry: DraftClass, playerId: string, by: D
  */
 export function applyDraftPicks(state: SeasonState, picks: number, playerId: string | null): SeasonState {
   const entry = draftClassOf(state, state.seasonNumber);
-  if (!entry || entry.date !== state.date) throw new Error('The NBA draft is held on draft day.');
+  if (!entry || entry.date !== state.date) throw new Error('The NAL draft is held on draft day.');
   if (!Number.isInteger(picks) || picks < 1 || entry.picks.length + picks > entry.order.length) throw new Error('Choose picks left in this draft.');
   let next = state;
   for (let index = 0; index < picks; index += 1) {

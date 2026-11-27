@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { gamePersonName } from '../src/world/game-names';
 import type { SeasonState } from '../src/domain/season';
 import { ASSISTANT_DIRECTORY, COACH_DIRECTORY, FITNESS_DIRECTORY, PHYSIO_DIRECTORY, SCOUT_DIRECTORY, YOUTH_COACH_DIRECTORY, staffNationality } from '../src/data/staff-directory';
 import { PRESIDENT_RANGE, countryName, nameCapacity } from '../src/data/people-names';
@@ -54,9 +55,9 @@ describe('real-looking club people', () => {
     for (const name of presidents) expect(seen.has(name)).toBe(false);
   });
 
-  it('uses the real president and assistant coach where Wikipedia lists them', () => {
-    expect(world.presidents.find(president => president.clubId === efes)!.name).toBe(realClubPerson(efes, 'president')!.name);
-    expect(roleStaff(start, 'assistant', efes).map(member => member.name)).toEqual([realClubPerson(efes, 'assistant-coach')!.name]);
+  it('uses the real president and assistant coach where Wikipedia lists them, under their game names', () => {
+    expect(world.presidents.find(president => president.clubId === efes)!.name).toBe(gamePersonName(realClubPerson(efes, 'president')!.name));
+    expect(roleStaff(start, 'assistant', efes).map(member => member.name)).toEqual([gamePersonName(realClubPerson(efes, 'assistant-coach')!.name)]);
     // Other clubs' presidents are generated, mostly with names of their own country.
     const generated = world.presidents.filter(president => president.clubId !== efes);
     const spanish = generated.filter(president => president.clubId.startsWith('acb'));

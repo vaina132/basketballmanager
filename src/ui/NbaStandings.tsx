@@ -16,7 +16,7 @@ export function NbaStandings({ season, fixtures, managedId, seasonLabel }: { sea
   const played = fixtures.filter(fixture => !fixture.stage && !fixture.competition && fixture.result && nba.conferences.some(conference => conference.divisions.some(division => division.clubIds.includes(fixture.homeClubId)))).length
   const divisionOf = (id: string) => nba.conferences.flatMap(conference => conference.divisions).find(division => division.clubIds.includes(id))!
   return <section className="season-standings panel nba-standings" aria-labelledby="nba-standings-title" data-nba-standings>
-    <header className="season-panel-heading"><div><h2 id="nba-standings-title">Conference standings</h2><p>NBA · {seasonLabel}</p></div><span>{played} of {tables.league.length * 41} games played</span></header>
+    <header className="season-panel-heading"><div><h2 id="nba-standings-title">Conference standings</h2><p>NAL · {seasonLabel}</p></div><span>{played} of {tables.league.length * 41} games played</span></header>
     {nba.conferences.map(conference => {
       const rows = tables.conferences[conference.id] ?? []
       const leader = rows[0]
@@ -37,7 +37,7 @@ export function NbaStandings({ season, fixtures, managedId, seasonLabel }: { sea
         </table>
       </div>
     })}
-    <details className="season-table-rules"><summary>Table rules <span>NBA · Winning percentage</span></summary>
+    <details className="season-table-rules"><summary>Table rules <span>NAL · Winning percentage</span></summary>
       <p>Clubs are ranked by winning percentage. Places 1-6 of each conference reach the playoffs; places 7-10 play the play-in for the seventh and eighth seeds.</p>
       <p>Ties: games between the clubs, then a division winner first, division record, conference record and records against playoff clubs, then point difference. A tie left after every step uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
     </details>

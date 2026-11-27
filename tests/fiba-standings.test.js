@@ -117,7 +117,7 @@ describe('FIBA Official Basketball Rules 2026, Appendix D (the labelled default,
     expect(week1.map(entry => entry.played).sort()).toEqual([0, 1, 1, 1, 1]);
     expect(week1.at(-1).played).toBe(0);
     const markup = renderToStaticMarkup(createElement(SeasonWorkspace, { ...uiProps, season: state }));
-    expect(markup).toContain('FIBA default · Classification points');
+    expect(markup).toContain('International default · Classification points');
     expect(markup).toContain('>Pts</th>');
     expect(markup).toContain('Appendix D');
     expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);

@@ -89,25 +89,25 @@ const LNB = 'LNB 2026/27 competition regulations, articles 151-161: https://cdn.
 
 export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonFormat>> = Object.freeze({
   'nba-2026-1': {
-    id: 'nba-2026-1', label: 'NBA play-in and playoffs', verified: true,
-    source: 'NBA play-in tournament and playoff format (NBA.com, 2025-26, unchanged for 2026-27): in each conference 7 v 8 and 9 v 10, then the loser of 7 v 8 against the winner of 9 v 10 for the eighth seed; first round 1-8, 4-5, 2-7, 3-6, conference semi-finals, conference finals and the NBA Finals, every series best of seven (2-2-1-1-1), home court to the better seed (in the Finals the better regular-season record). No promotion or relegation. Games every second day from the play-in (simplified calendar).',
+    id: 'nba-2026-1', label: 'NAL play-in and playoffs', verified: true,
+    source: 'NBA play-in tournament and playoff format (NBA.com, 2025-26, unchanged for 2026-27): in each conference 7 v 8 and 9 v 10, then the loser of 7 v 8 against the winner of 9 v 10 for the eighth seed; first round 1-8, 4-5, 2-7, 3-6, conference semi-finals, conference finals and the NAL Finals, every series best of seven (2-2-1-1-1), home court to the better seed (in the Finals the better regular-season record). No promotion or relegation. Games every second day from the play-in (simplified calendar).',
     series: [...nbaConference('east'), ...nbaConference('west'),
       { id: 'final', stage: 'final', step: 'finals', bestOf: 7, a: { winner: 'east-cf', byLeague: true }, b: { winner: 'west-cf', byLeague: true } }],
     champion: { series: 'final' }, promoted: [], relegated: [],
   },
   'bbl-2026-1': {
-    id: 'bbl-2026-1', label: 'Basketball Bundesliga playoffs', verified: true,
+    id: 'bbl-2026-1', label: 'Deutsche Basketball Liga playoffs', verified: true,
     source: 'easyCredit BBL Ausschreibung 2026/2027, sections 4.3-4.7: https://cms.easycredit-bbl.de/wp-content/uploads/2026/07/easyCredit-BBL-Ausschreibung-DM-2026_2027.pdf',
     series: [...playIn(7, 8, 9, 10), ...bracket([...places(1, 2, 3, 4, 5, 6), { winner: 'pi-a', rank: 7 }, { winner: 'pi-c', rank: 8 }], [5, 5, 5])],
     champion: { series: 'final' }, promoted: [], relegated: [{ place: 17 }, { place: 18 }],
   },
   'lnb-elite-2026-1': {
-    id: 'lnb-elite-2026-1', label: 'LNB Élite playoffs', verified: true, source: `${LNB} (articles 151-154)`,
+    id: 'lnb-elite-2026-1', label: 'Ligue Élite playoffs', verified: true, source: `${LNB} (articles 151-154)`,
     series: [...playIn(7, 8, 9, 10), ...bracket([...places(1, 2, 3, 4, 5, 6), { winner: 'pi-a', rank: 7 }, { winner: 'pi-c', rank: 8 }], [3, 5, 5])],
     champion: { series: 'final' }, promoted: [], relegated: [{ place: 16 }, { place: 15, unlessWinsLowerFinal: true }],
   },
   'lnb-elite2-2026-1': {
-    id: 'lnb-elite2-2026-1', label: 'Élite 2 promotion playoffs', verified: true, source: `${LNB} (articles 158-161)`,
+    id: 'lnb-elite2-2026-1', label: 'Ligue Élite 2 promotion playoffs', verified: true, source: `${LNB} (articles 158-161)`,
     // Bracket seeds 1-8: places 2-5, the top division's 15th as seed 5, place 6, then the play-in winners; QF A 1-8, B 3-6, C 2-7, D 4-5; SF A-B and C-D.
     series: [...playIn(7, 8, 9, 10), ...((): PostseasonSeriesSpec[] => {
       const seed = [{ place: 2, rank: 1 }, { place: 3, rank: 2 }, { place: 4, rank: 3 }, { place: 5, rank: 4 }, { place: 15, rank: 5, otherTier: true as const }, { place: 6, rank: 6 }, { winner: 'pi-a', rank: 7 }, { winner: 'pi-c', rank: 8 }] satisfies PostseasonRef[];
@@ -120,37 +120,37 @@ export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonF
     champion: { place: 1 }, promoted: [{ place: 1 }, { winner: 'final' }], relegated: [{ place: 19 }, { place: 20 }],
   },
   'bsl-2026-1': {
-    id: 'bsl-2026-1', label: 'Basketbol Süper Ligi playoffs', verified: true,
+    id: 'bsl-2026-1', label: 'Basket Süper Lig playoffs', verified: true,
     source: 'TBF BSL 2026-2027 statute, sections 1-2: https://www.tbf.org.tr/sitefiny-tbf-media/dokuman/C501A8C88D554440871463FE238691A3_basketbol-super-ligi-bsl-2026-2027-sezonu-statusu-ve-lig-siralamasi.pdf',
     series: bracket(places(1, 2, 3, 4, 5, 6, 7, 8), [3, 5, 5]),
     champion: { series: 'final' }, promoted: [], relegated: [{ place: 15 }, { place: 16 }],
   },
   'tbl-2026-1': {
-    id: 'tbl-2026-1', label: 'Türkiye Basketbol Ligi promotion playoffs', verified: false,
+    id: 'tbl-2026-1', label: 'Türkiye Basket 1. Lig promotion playoffs', verified: false,
     source: 'Default: no 2026-27 TBL statute was found. First place and the winner of a places 2-9 playoff (best of three, then best of five) are promoted, matching the BSL\'s two relegation places; the bottom two are relegated.',
     series: bracket(places(2, 3, 4, 5, 6, 7, 8, 9), [3, 5, 5]),
     champion: { place: 1 }, promoted: [{ place: 1 }, { winner: 'final' }], relegated: [{ place: 16 }, { place: 17 }],
   },
   'acb-2026-1': {
-    id: 'acb-2026-1', label: 'Liga Endesa playoffs', verified: true,
+    id: 'acb-2026-1', label: 'Liga Española playoffs', verified: true,
     source: 'Liga Endesa playoff format (quarter-finals best of three 1-1-1, semi-finals and final best of five), unchanged for 2026-27 (playoffs 25 May-29 June 2027): https://www.flashscore.com.mx/noticias/baloncesto-acb-todo-lo-que-necesitas-saber-de-la-temporada-26-27-fechas-calendario-liga-copa-supercopa/p2LfB19t/. Relegation of the bottom two matches Primera FEB\'s two promotion places.',
     series: bracket(places(1, 2, 3, 4, 5, 6, 7, 8), [3, 5, 5]),
     champion: { series: 'final' }, promoted: [], relegated: [{ place: 17 }, { place: 18 }],
   },
   'primera-feb-2026-1': {
-    id: 'primera-feb-2026-1', label: 'Primera FEB promotion playoffs', verified: true,
+    id: 'primera-feb-2026-1', label: 'Liga Española 2 promotion playoffs', verified: true,
     source: 'FEB Primera FEB 2026-27 regulations, sections 3.2-3.3: https://www.feb.es/Documentos/Enlaces/[6537]BBCC%20Primera%20FEB%2026-27%20-%20Versi%C3%B3n%20Web.pdf. The final stage\'s semi-final pairing (1-8/4-5 and 2-7/3-6) is assumed.',
     series: bracket(places(2, 3, 4, 5, 6, 7, 8, 9), [5, 1, 1], { neutralFrom: 'semi-final' }),
     champion: { place: 1 }, promoted: [{ place: 1 }, { winner: 'final' }], relegated: [{ place: 16 }, { place: 17 }, { place: 18 }],
   },
   'lba-2026-1': {
-    id: 'lba-2026-1', label: 'Lega Basket Serie A playoffs', verified: true,
+    id: 'lba-2026-1', label: 'Serie A Basket playoffs', verified: true,
     source: 'LBA playoffs: top eight, quarter-finals and semi-finals best of five, final best of seven (2025-26 format; no 2026-27 change announced): https://en.wikipedia.org/wiki/2025%E2%80%9326_LBA_season. Relegation of the bottom two matches Serie A2\'s two promotion places.',
     series: bracket(places(1, 2, 3, 4, 5, 6, 7, 8), [5, 5, 7]),
     champion: { series: 'final' }, promoted: [], relegated: [{ place: 15 }, { place: 16 }],
   },
   'serie-a2-2026-1': {
-    id: 'serie-a2-2026-1', label: 'Serie A2 promotion playoffs and play-outs', verified: true,
+    id: 'serie-a2-2026-1', label: 'Serie A2 Basket promotion playoffs and play-outs', verified: true,
     source: 'LNP Serie A2 2026-27 formula: https://www.legapallacanestro.com/formula-serie-a2-202627. The quarter-final pairing of places 2-7 and the two play-in winners (seeded 8 and 9 by the play-in game they won) is assumed.',
     series: [
       { id: 'pi-a', stage: 'play-in', step: 'play-in-1', bestOf: 1, a: { place: 10 }, b: { place: 13 } },
@@ -165,7 +165,7 @@ export const POSTSEASON_FORMATS: Readonly<Record<PostseasonFormatId, PostseasonF
     champion: { place: 1 }, promoted: [{ place: 1 }, { winner: 'final' }], relegated: [{ place: 20 }, { loser: 'po-c' }],
   },
   'gbl-2026-1': {
-    id: 'gbl-2026-1', label: 'Greek Basket League playoffs', verified: true,
+    id: 'gbl-2026-1', label: 'Hellenic Basket League playoffs', verified: true,
     source: 'Greek Basket League playoffs: top eight, quarter-finals and semi-finals best of three, final best of five, no play-in or play-out; last place relegated (2025-26 format and assembly decision; no 2026-27 change found): https://en.wikipedia.org/wiki/2025%E2%80%9326_Greek_Basket_League, https://www.parapolitika.gr/sports/article/1590544/basket-league-psifistikan-oi-62-xenoi-upovivazetai-mia-omada-stin-elite-league/',
     series: bracket(places(1, 2, 3, 4, 5, 6, 7, 8), [3, 3, 5]),
     champion: { series: 'final' }, promoted: [], relegated: [{ place: 14 }],

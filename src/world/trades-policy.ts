@@ -132,7 +132,7 @@ const SEASON_REASON = 'Trades are open from the season start until the trade dea
 
 /** Whether trades are open now, for the manager's offers (in season until the deadline week; in the offseason after the draft window with a later recruitment day left). */
 export function tradeWindowReason(state: Pick<SeasonState, 'status' | 'seasonNumber' | 'round' | 'date'> & WorldContext & { market?: SeasonState['market'] }): string | null {
-  if (!usesTrades(state)) return 'Trades between NBA clubs are part of new NBA careers.';
+  if (!usesTrades(state)) return 'Trades between NAL clubs are part of new NAL careers.';
   if (state.status === 'active') return state.round < seasonRounds(state) && dateForRound(state.round, state.seasonNumber) <= tradeDeadline(state.seasonNumber) ? null : `The trade deadline (${tradeDeadline(state.seasonNumber)}) has passed. Trades open again in the offseason after the draft.`;
   const window = state.market ? getMarketWindow({ market: state.market, seasonNumber: state.seasonNumber }) : null;
   if (!window || window.closed) return SEASON_REASON;
@@ -191,8 +191,8 @@ export function checkTrade(context: WorldContext & { employment: SeasonEmploymen
     return { clubId: side.clubId, outgoing: out, incoming, payrollBefore: before, payrollAfter: after, overCap, maxIncoming: overCap ? Math.floor(out * TRADE_RULES.salaryMatchPercent / 100) + TRADE_SALARY_EXTRA : null, rosterBefore, rosterAfter: rosterBefore - side.playerIds.length + other.playerIds.length };
   }) as [TradeClubCheck, TradeClubCheck];
   const result = (reason: string | null): TradeCheck => ({ reason, clubs });
-  if (!usesTrades(context)) return result('Trades between NBA clubs are part of new NBA careers.');
-  if (first.clubId === second.clubId || !isNbaClub(world, first.clubId) || !isNbaClub(world, second.clubId)) return result('Choose two different NBA clubs.');
+  if (!usesTrades(context)) return result('Trades between NAL clubs are part of new NAL careers.');
+  if (first.clubId === second.clubId || !isNbaClub(world, first.clubId) || !isNbaClub(world, second.clubId)) return result('Choose two different NAL clubs.');
   for (const side of sides) if (side.playerIds.length < 1 || side.playerIds.length > TRADE_RULES.maxPlayersPerSide) return result(`Each side sends one to ${TRADE_RULES.maxPlayersPerSide} players.`);
   const all = [...first.playerIds, ...second.playerIds];
   if (new Set(all).size !== all.length) return result('Choose each player once.');
@@ -204,7 +204,7 @@ export function checkTrade(context: WorldContext & { employment: SeasonEmploymen
     for (let year = view.season + 1; year <= through; year += 1) if (effectiveContractsForRound(employment, year, 1).some(item => item.playerId === playerId && item.clubId !== side.clubId)) return result('A player with an agreement with another club for a later season cannot be traded.');
   }
   const { min, max } = NBA_CAP_RULES.roster;
-  for (const club of clubs) if (club.rosterAfter > max || view.phase === 'season' && club.rosterAfter < min) return result(`After the trade every NBA club must keep ${min}-${max} players${view.phase === 'season' ? '' : ' (at most 15 for next season)'}.`);
+  for (const club of clubs) if (club.rosterAfter > max || view.phase === 'season' && club.rosterAfter < min) return result(`After the trade every NAL club must keep ${min}-${max} players${view.phase === 'season' ? '' : ' (at most 15 for next season)'}.`);
   // Later seasons: the moving players' later terms move too, so no squad may pass the limit.
   for (let year = view.season + 1; year < view.season + MAX_CONTRACT_SEASONS; year += 1) for (const [index, side] of sides.entries()) {
     const other = sides[1 - index]!;

@@ -29,7 +29,7 @@ export function quoteTradeProposal(state: SeasonState, toClubId: string, sends: 
 }
 
 function tradeProposalReason(state: SeasonState): string | null {
-  if (!state.trades || !usesTrades(state)) return 'Trades between NBA clubs are part of new NBA careers.';
+  if (!state.trades || !usesTrades(state)) return 'Trades between NAL clubs are part of new NAL careers.';
   if (!state.managedClubId) return 'Without a club you cannot propose trades.';
   const window = tradeWindowReason(state);
   if (window) return window;

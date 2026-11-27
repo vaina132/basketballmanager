@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { gamePersonName } from '../src/world/game-names';
 import type { SeasonState } from '../src/domain/season';
 import { NBA_CLUB_IDS, nbaPack, realIdNbaPack, realNbaClubId } from './helpers/nba-pack';
 import { economyPack } from './helpers/economy-pack';
@@ -32,11 +33,11 @@ describe('real NBA head coaches (format 91)', () => {
     const pool = coachWorld(worldOf(state));
     for (const post of REAL_NBA_COACH_POSTS) {
       const coach = pool.coaches.get(pool.opening.get(post.teamId)!)!;
-      expect(coach.name).toBe(REAL_NBA_COACHES.find(item => item.id === post.coachId)!.name);
+      expect(coach.name).toBe(gamePersonName(REAL_NBA_COACHES.find(item => item.id === post.coachId)!.name));
       expect(coach.generated).toBeUndefined();
       for (const value of Object.values(coach.attributes)) { expect(value).toBeGreaterThanOrEqual(1); expect(value).toBeLessThanOrEqual(20); }
     }
-    expect(clubHeadCoach(state, GSW)).toMatchObject({ name: 'Steve Kerr', titles: { nba: 4, league: 0 } });
+    expect(clubHeadCoach(state, GSW)).toMatchObject({ name: gamePersonName('Steve Kerr'), titles: { nba: 4, league: 0 } });
     // The Spanish clubs keep the European rules (generated coaches here: the test pack's ids have no real posts).
     expect(pool.coaches.get(pool.opening.get('acb-1')!)!.generated).toBe(true);
     // The manager's own club: its real coach (Joe Mazzulla) becomes a free agent, first among the free coaches.
@@ -45,10 +46,10 @@ describe('real NBA head coaches (format 91)', () => {
     const mazzulla = pool.opening.get(BOS)!;
     expect(places.free).toContain(mazzulla);
     expect(places.spells[mazzulla]!.at(-1)).toMatchObject({ clubId: null, reason: 'displaced' });
-    expect(headCoachLists(state, NBA_CLUB_IDS.map(realNbaClubId)).free[0]!.name).toBe('Joe Mazzulla');
+    expect(headCoachLists(state, NBA_CLUB_IDS.map(realNbaClubId)).free[0]!.name).toBe(gamePersonName('Joe Mazzulla'));
     // A club that sacks its coach hires the best free coach within its pull: here the displaced Mazzulla.
     const changed = restartBoard(state, WAS, 'ai', 'season');
-    expect(clubHeadCoach(changed, WAS)).toMatchObject({ name: 'Joe Mazzulla' });
+    expect(clubHeadCoach(changed, WAS)).toMatchObject({ name: gamePersonName('Joe Mazzulla') });
   });
 
   it('rates NBA coaches at the NBA job level, counting NBA championships like EuroLeague titles', () => {
@@ -86,7 +87,7 @@ describe('real NBA head coaches (format 91)', () => {
     const envelope = JSON.parse(text);
     envelope.formatVersion = 90; envelope.state.schemaVersion = 90;  // A format-92 NBA world (with the cap) is refused first for its cap, then for the NBA careers marker.
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 9[123] or later/);
-    expect(() => createSeason({ seed: 3, world, managedClubId: BOS, ...NEW_CAREER_SYSTEMS, nbaJobs: 'yes' as unknown as boolean })).toThrow(/NBA careers/);
+    expect(() => createSeason({ seed: 3, world, managedClubId: BOS, ...NEW_CAREER_SYSTEMS, nbaJobs: 'yes' as unknown as boolean })).toThrow(/NAL careers/);
   });
 });
 

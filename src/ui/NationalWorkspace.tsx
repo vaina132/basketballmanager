@@ -98,8 +98,8 @@ export function NationalWorkspace({ season }: { season: SeasonState }) {
     </section>
 
     <MoreInfo label="How national teams work">
-      <p>National teams play in FIBA windows in late November and late February: on the Thursday and the Saturday. Leagues with room in their calendar do not play that weekend.</p>
-      <p>Head coaches pick twelve players of their country. Players whose club plays a game that week stay with their club, as EuroLeague clubs do. Called-up players miss club training from Wednesday to Saturday and come back tired.</p>
+      <p>National teams play in international windows in late November and late February: on the Thursday and the Saturday. Leagues with room in their calendar do not play that weekend.</p>
+      <p>Head coaches pick twelve players of their country. Players whose club plays a game that week stay with their club, as Euro Elite League clubs do. Called-up players miss club training from Wednesday to Saturday and come back tired.</p>
       <p>Tables: 2 points for a win, 1 for a loss, then point difference. The top three of each group play the summer tournament. {seasonLabel(1)}: the game plays the last two windows of the real second round; its table starts at zero.</p>
       <p>When a country has fewer than twelve players in the game, generated players fill the squad.</p>
     </MoreInfo>

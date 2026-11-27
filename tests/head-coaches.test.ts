@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { gamePersonName } from '../src/world/game-names';
 import type { CareerWorld } from '../src/domain/world';
 import type { SeasonState } from '../src/domain/season';
 import { createSeason, NEW_CAREER_SYSTEMS } from '../src/world/season';
@@ -78,15 +79,15 @@ describe('real head coaches (format 82)', () => {
     expect(state.coaches?.model).toBe('coaches-2');
     expect(create({ coachSteering: false }).coaches?.model).toBe('coaches-1');
     const pool = coachWorld(world);
-    expect(pool.coaches.get(pool.opening.get(FENERBAHCE)!)!.name).toBe('Šarūnas Jasikevičius');
-    expect(pool.coaches.get(pool.opening.get(EFES)!)!.name).toBe('Pablo Laso');
-    expect(pool.coaches.get(pool.opening.get(BESIKTAS)!)!.name).toBe('Dušan Alimpijević');
+    expect(pool.coaches.get(pool.opening.get(FENERBAHCE)!)!.name).toBe(gamePersonName('Šarūnas Jasikevičius'));
+    expect(pool.coaches.get(pool.opening.get(EFES)!)!.name).toBe(gamePersonName('Pablo Laso'));
+    expect(pool.coaches.get(pool.opening.get(BESIKTAS)!)!.name).toBe(gamePersonName('Dušan Alimpijević'));
     const places = coachPlaces(state);
     expect(places.clubs[FENERBAHCE]).toBe(MANAGER_COACH);
     const jasikevicius = pool.opening.get(FENERBAHCE)!;
     expect(places.free).toContain(jasikevicius);
     expect(places.spells[jasikevicius]!.at(-1)).toMatchObject({ clubId: null, reason: 'displaced' });
-    expect(clubHeadCoach(state, EFES)).toMatchObject({ name: 'Pablo Laso' });
+    expect(clubHeadCoach(state, EFES)).toMatchObject({ name: gamePersonName('Pablo Laso') });
     // Every club of the world has exactly one coach; no coach holds two clubs.
     const held = Object.values(places.clubs).filter(id => id !== MANAGER_COACH);
     expect(new Set(held).size).toBe(held.length);
@@ -105,7 +106,7 @@ describe('real head coaches (format 82)', () => {
     expect(places.clubs[EFES]).not.toBe(efesCoach);
     expect(places.clubs[EFES]).not.toBe(MANAGER_COACH);
     // The best free coach within the club's reach is hired: here the displaced Jasikevičius.
-    expect(headCoach(changed, places.clubs[EFES]!)!.name).toBe('Šarūnas Jasikevičius');
+    expect(headCoach(changed, places.clubs[EFES]!)!.name).toBe(gamePersonName('Šarūnas Jasikevičius'));
     // The manager leaving a club leaves it to hire a coach; taking a club displaces its coach.
     const moved = restartBoard(restartBoard(changed, FENERBAHCE, 'ai', 'end'), BESIKTAS, 'manager', 'end');
     const after = coachPlaces(moved);

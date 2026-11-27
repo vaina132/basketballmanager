@@ -255,7 +255,7 @@ export function validateMatchState(value: unknown): asserts value is MatchState 
   // NBA step 3 (provisional format 90): the competition's rules; absent means FIBA. The NBA rules need the play model.
   if (Object.hasOwn(state, 'ruleset') && !isRulesetId(state.ruleset)) fail('ruleset', 'must name supported competition rules when recorded');
   rules = rulesetById(state.ruleset as Ruleset['id'] | undefined);
-  if (isNba(rules) && !Object.hasOwn(state, 'playModel')) fail('ruleset', 'must be played with the play model for the NBA rules');
+  if (isNba(rules) && !Object.hasOwn(state, 'playModel')) fail('ruleset', 'must be played with the play model for the NAL rules');
   if (state.schemaVersion !== 2 || !['rules-2', 'possession-3'].includes(state.engineVersion as string)) fail('state', 'uses an unsupported schema or engine version');
   // Format 79: the richer play model, with the sides a computer coach runs.
   // Format 81: the richer play model with the dead balls of a real game (`plays-3`).

@@ -126,7 +126,7 @@ describe('rule choice, validation and careers (step 3.4e-2)', () => {
     let state = setEmploymentDelegation(createSeason({ world: ruledWorld(), seed: 2718, ...NEW_CAREER_SYSTEMS, injuryMode: 'off' }), true);
     state = play(state);
     const markup = renderToStaticMarkup(createElement(SeasonWorkspace, { ...uiProps, season: state }));
-    expect(markup).toContain('FIP · Points');
+    expect(markup).toContain('Serie A Basket · Points');
     expect(parseSeason(serializeSeasonCompact(state))).toEqual(state);
     while (state.status === 'active') {
       state = play(state);
@@ -149,9 +149,9 @@ describe('rule choice, validation and careers (step 3.4e-2)', () => {
     // The Competition screen opens on the manager's league: a German and a Spanish career show their own rules.
     const world = ruledWorld();
     const opening = league => renderToStaticMarkup(createElement(SeasonWorkspace, { ...uiProps, season: createSeason({ world, managedClubId: world.domesticLeagues.find(item => item.id === league).clubIds[0] }) }));
-    expect(opening('germany')).toContain('BBL · Wertungspunkte');
+    expect(opening('germany')).toContain('Deutsche Basketball Liga · Wertungspunkte');
     expect(opening('germany')).toContain('>0:0</td>');
-    expect(opening('spain')).toContain('ACB · Wins');
+    expect(opening('spain')).toContain('Liga Española · Wins');
   }, 300_000);
 });
 

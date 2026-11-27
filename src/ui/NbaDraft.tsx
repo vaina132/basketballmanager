@@ -56,7 +56,7 @@ export function NbaDraft({ season, disabled, onPick, onDelegate, onBringOver }: 
   const status = !recorded ? `Draft day: ${medicalDate(day)}${lottery ? '' : ' · the lottery follows the play-in'}` : isDraftComplete(recorded) ? 'The draft is over' : onClock ? `You are on the clock · pick ${picks.length + 1}` : `Pick ${picks.length + 1} of ${recorded.order.length}`
 
   return <section className="nba-draft" aria-labelledby="nba-draft-heading" data-nba-draft>
-    <header className="nba-draft-bar panel"><h3 id="nba-draft-heading">NBA draft</h3><span>{status}</span>
+    <header className="nba-draft-bar panel"><h3 id="nba-draft-heading">NAL draft</h3><span>{status}</span>
       {onClock && <button className="text-button" onClick={onDelegate} disabled={disabled}>Let your assistant pick</button>}</header>
     {lottery && <div className="nba-draft-top">
       <section className="panel nba-draft-lottery" aria-labelledby="nba-lottery-heading">

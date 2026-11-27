@@ -231,7 +231,7 @@ function validateEuropeShape(value: unknown, world: CareerWorld, path: string, v
     }
   }
   const euroleague = competitions.findIndex(competition => competition.kind === 'euroleague');
-  if (!Array.isArray(europe.oneYear) || (europe.oneYear as unknown[]).some(id => euroleague < 0 || !((entrants[euroleague] as { clubIds: unknown[] }).clubIds.includes(id)))) fail(`${path}.oneYear`, 'must list EuroLeague entrants');
+  if (!Array.isArray(europe.oneYear) || (europe.oneYear as unknown[]).some(id => euroleague < 0 || !((entrants[euroleague] as { clubIds: unknown[] }).clubIds.includes(id)))) fail(`${path}.oneYear`, 'must list Euro Elite League entrants');
   if (two && Object.hasOwn(europe, 'held')) for (const [index, item] of boundedList(europe.held, `${path}.held`, 400).entries()) {
     const held = record(item, `${path}.held[${index}]`, ['clubId', 'competitionId', 'type', 'until', 'reason']);
     if (!world.clubs.some(club => club.id === held.clubId) || !competitions.some(competition => competition.id === held.competitionId) || !['licence', 'multi-year'].includes(held.type as string) || !(held.until === null || Number.isInteger(held.until)) || !['relegated', 'unpaid', 'declined', 'higher'].includes(held.reason as string)) fail(`${path}.held[${index}]`, 'must keep a licence or multi-year place of a club of this world');
@@ -256,7 +256,7 @@ function validatePlace(value: unknown, path: string): void {
   const place = record(value, path, ['type', 'until', 'reason', ...(['rank', 'route'] as const).filter(key => Object.hasOwn(raw, key))]);
   if (!PLACE_TYPES.includes(place.type as string) || (place.until === null) !== (place.type === 'licence') || place.until !== null && !Number.isInteger(place.until) || typeof place.reason !== 'string') fail(path, 'must name a place type, its end season and its reason');
   if (Object.hasOwn(place, 'rank')) number(place.rank, `${path}.rank`, 1, 100);
-  if (Object.hasOwn(place, 'route')) { number(place.route, `${path}.route`, 1, 3); if (place.type !== 'route') fail(`${path}.route`, 'belongs to a EuroCup route place'); }
+  if (Object.hasOwn(place, 'route')) { number(place.route, `${path}.route`, 1, 3); if (place.type !== 'route') fail(`${path}.route`, 'belongs to a Euro Challenge Cup route place'); }
 }
 
 /** A season's places as its places day decided them (the manager's later answers are kept beside them). */
@@ -2042,7 +2042,7 @@ function validateEmployment(value: unknown, seasonNumber: number, round: number,
     const path = `employment.contracts[${index}]`;
     const raw = record(value, path, ['id', 'playerId', 'clubId', 'startsSeason', 'endsSeason', 'seasonWage', 'signedSeason', 'signedRound', 'kind', ...(version >= 18 ? ['startsRound'] : []), ...optionalClauseKeys(value, version, ['releaseFee']), ...roleKeys(value, context), ...(version >= 92 && value !== null && typeof value === 'object' && Object.hasOwn(value, 'capRoute') ? ['capRoute'] : [])]);
     // Format 92: an NBA club's cap route, on its own signings only.
-    if (Object.hasOwn(raw, 'capRoute') && (!NBA_CAP_ROUTES.includes(raw.capRoute as NbaCapRoute) || !isCapClub(context, raw.clubId as string) || raw.kind === 'initial' || raw.kind === 'joined')) fail(`employment.contracts[${index}].capRoute`, 'must name the cap route of an NBA club\'s signing');
+    if (Object.hasOwn(raw, 'capRoute') && (!NBA_CAP_ROUTES.includes(raw.capRoute as NbaCapRoute) || !isCapClub(context, raw.clubId as string) || raw.kind === 'initial' || raw.kind === 'joined')) fail(`employment.contracts[${index}].capRoute`, 'must name the cap route of an NAL club\'s signing');
     const entry = version < 18 ? { ...raw, startsRound: 1 } : raw;
     if (entry.id !== `employment-contract-${index + 1}`) fail(`${path}.id`, 'must use sequential contract identities');
     const player = catalogById.get(entry.playerId as string)?.player;
@@ -3405,8 +3405,8 @@ function validateFinance(value: unknown, clubs: readonly Team[], fixtures: Seaso
     } else if (kind === 'luxury-tax' || kind === 'tax-share' || kind === 'salary-floor') {
       // Format 92: the luxury tax at the end of the NBA's regular season, and the equal shares of the clubs that paid none.
       // Format 93: in the same week, the shortfall below the minimum team salary.
-      if (entry.ticket !== null || entry.coach !== null || !world?.nba || !employment || !isNbaClub(world, entry.clubId) || entry.sourceId !== `${kind}-s${year}`) fail(path, 'must be an NBA club\'s luxury tax or tax share of its season');
-      if (year === seasonNumber && entryRound !== nbaRegularSeasonEndRound({ world, fixtures })) fail(path, 'must be booked in the NBA\'s last regular-season week');
+      if (entry.ticket !== null || entry.coach !== null || !world?.nba || !employment || !isNbaClub(world, entry.clubId) || entry.sourceId !== `${kind}-s${year}`) fail(path, 'must be an NAL club\'s luxury tax or tax share of its season');
+      if (year === seasonNumber && entryRound !== nbaRegularSeasonEndRound({ world, fixtures })) fail(path, 'must be booked in the NAL\'s last regular-season week');
       const bills = nbaTaxBills({ world, employment, fixtures: [], seasonNumber: year }, entryRound), bill = bills.bills.find(item => item.clubId === entry.clubId);
       if (kind === 'salary-floor' ? !bill || nbaSalaryFloorShortfall(bill.payroll) <= 0 || amount !== -nbaSalaryFloorShortfall(bill.payroll) : kind === 'luxury-tax' ? !bill || bill.tax <= 0 || amount !== -bill.tax : bills.share <= 0 || !bills.receivers.includes(entry.clubId) || amount !== bills.share) fail(path, 'must charge the exact luxury tax or minimum-salary shortfall on the payroll, or pay the exact equal share of a club that paid none');
       const counted = taxEntries.get(year) ?? { round: entryRound, count: 0, expected: bills.bills.filter(item => item.tax > 0).length + (bills.share > 0 ? bills.receivers.length : 0) + (world.nba.moves ? bills.bills.filter(item => nbaSalaryFloorShortfall(item.payroll) > 0).length : 0) };
@@ -3747,7 +3747,7 @@ function validateStateUncached(value: unknown, version: SeasonFormatVersion): vo
   if (version < 104 && Object.hasOwn(world, 'backgroundSquads')) fail('world.backgroundSquads', 'requires format 104 or later');
   // Format 107: NBA free agency that keeps the stars is a rule of new careers only.
   if (version < 107 && Object.hasOwn(world, 'nbaFreeAgency')) fail('world.nbaFreeAgency', 'requires format 107 or later');
-  if (usesNbaDraft({ world }) !== Object.hasOwn(state, 'draft')) fail('draft', 'must be recorded exactly in worlds with the NBA draft');
+  if (usesNbaDraft({ world }) !== Object.hasOwn(state, 'draft')) fail('draft', 'must be recorded exactly in worlds with the NAL draft');
   const draft = Object.hasOwn(state, 'draft') ? validateDraftShape(state.draft, state as unknown as SeasonState) : undefined;
   // Format 91: NBA careers (real NBA head coaches, NBA job rules).
   if (version < 91 && Object.hasOwn(world, 'nbaJobs')) fail('world.nbaJobs', 'requires format 91 or later');

@@ -1,29 +1,25 @@
-import type { CSSProperties, ReactNode } from 'react'
-import { REAL_CLUB_LOGOS, REAL_COMPETITION_LOGOS } from '../data/real-logos'
+import type { CSSProperties } from 'react'
+import { badgeMarkup, competitionMarkup } from './club-badge'
 import './club-logo.css'
 
 /**
- * Real club and competition logos (API-Sports; owner decision, 22 November 2026). Only real-pack clubs
- * and competitions have entries, so fictional worlds and clubs without a logo keep the plain badge.
+ * Drawn badges replace the real club and competition logos (owner decision, 27 November 2026). Every club, real or
+ * fictional, gets a badge in its colour with its short name; competitions get a small emblem with their initials.
  */
-export const clubLogoUrl = (clubId: string | null | undefined): string | null => clubId && Object.hasOwn(REAL_CLUB_LOGOS, clubId) ? `/logos/clubs/${REAL_CLUB_LOGOS[clubId]}` : null
-export const competitionLogoUrl = (competitionId: string | null | undefined): string | null => competitionId && Object.hasOwn(REAL_COMPETITION_LOGOS, competitionId) ? `/logos/competitions/${REAL_COMPETITION_LOGOS[competitionId]}` : null
-
 type BadgeClub = { id: string; name: string; shortName: string; color?: string }
 
-/**
- * A club's badge box: the real logo inside the existing fixed-size box when one exists, otherwise the
- * coloured short name (the badge used before logos). The box keeps its size either way, so nothing shifts.
- */
-export function ClubBadge({ club, className, fallback, style }: { club: BadgeClub | null | undefined; className: string; fallback?: ReactNode; style?: CSSProperties }) {
-  const logo = clubLogoUrl(club?.id)
-  if (club && logo) return <span className={`${className} has-club-logo`} style={style} data-club-logo={club.id}><img className="club-logo-image" src={logo} alt={club.name} width={96} height={96} loading="lazy" decoding="async" /></span>
-  return <span className={className} style={{ color: club?.color, ...style }}>{fallback ?? club?.shortName}</span>
+/** A club's badge inside the existing fixed-size box, so nothing shifts. */
+export function ClubBadge({ club, className, style }: { club: BadgeClub | null | undefined; className: string; fallback?: unknown; style?: CSSProperties }) {
+  if (!club) return <span className={className} style={style} />
+  return <span className={`${className} has-club-logo`} style={style} data-club-badge={club.id}>
+    <svg className="club-badge-drawing" viewBox="0 0 100 100" role="img" aria-label={club.name} dangerouslySetInnerHTML={{ __html: badgeMarkup(club.id, club.shortName || club.name, club.color) }} />
+  </span>
 }
 
-/** A small inline logo for a club or competition; renders nothing when there is none. */
-export function InlineLogo({ kind, id, name, size = 16, decorative = false }: { kind: 'club' | 'competition'; id: string | null | undefined; name: string; size?: number; decorative?: boolean }) {
-  const logo = kind === 'club' ? clubLogoUrl(id) : competitionLogoUrl(id)
-  // Decorative beside the name written out, so a screen reader does not read the name twice.
-  return logo ? <img className="inline-logo" src={logo} alt={decorative ? '' : name} width={size} height={size} loading="lazy" decoding="async" data-logo-kind={kind} /> : null
+/** A small inline emblem: a competition's initials ring, or a club's badge when its colour and short name are given. */
+export function InlineLogo({ kind, id, name, size = 16, decorative = false, club }: { kind: 'club' | 'competition'; id: string | null | undefined; name: string; size?: number; decorative?: boolean; club?: { shortName: string; color?: string } }) {
+  if (!id) return null
+  const markup = kind === 'competition' ? competitionMarkup(name) : club ? badgeMarkup(id, club.shortName, club.color) : null
+  if (!markup) return null
+  return <svg className="inline-logo" width={size} height={size} viewBox="0 0 100 100" role={decorative ? undefined : 'img'} aria-hidden={decorative || undefined} aria-label={decorative ? undefined : name} data-logo-kind={kind} dangerouslySetInnerHTML={{ __html: markup }} />
 }

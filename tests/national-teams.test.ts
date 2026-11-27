@@ -17,8 +17,8 @@ describe('national teams (format 80)', () => {
     expect(nationalWindowWeeks(1)).toEqual([13, 26]);
     expect(nationalPausedWeeks(1, 30, 38)).toEqual([13, 26]);
     expect(nationalPausedWeeks(1, 38, 38)).toEqual([]);
-    expect(nationalTournamentName(1)).toBe('World Cup 2027 (Qatar)');
-    expect(nationalTournamentName(3)).toBe('EuroBasket 2029');
+    expect(nationalTournamentName(1)).toBe('World Championship 2027 (Qatar)');
+    expect(nationalTournamentName(3)).toBe('European Championship 2029');
   });
 
   it('starts new real-club careers with the 24 teams, coaches and the real groups; others are unchanged', () => {
@@ -62,7 +62,7 @@ describe('national teams (format 80)', () => {
     const qualifiers = national.competitions.find(item => item.id === 'nq-s1')!, tournament = national.competitions.find(item => item.id === 'nt-s1')!;
     expect(qualifiers.fixtures.every(fixture => fixture.result)).toBe(true);
     for (const group of qualifiers.groups) expect(nationalTable(national, qualifiers, group.id).reduce((sum, row) => sum + row.played, 0)).toBe(24);
-    expect(tournament.name).toBe('World Cup 2027 (Qatar)');
+    expect(tournament.name).toBe('World Championship 2027 (Qatar)');
     expect(tournament.fixtures.map(fixture => fixture.stage).filter(stage => stage !== 'group')).toEqual(['semi', 'semi', 'final', 'third']);
     expect(tournament.fixtures.every(fixture => fixture.result && fixture.result.home !== fixture.result.away)).toBe(true);
     const next = national.competitions.find(item => item.id === 'nq-s2')!;

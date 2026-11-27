@@ -153,7 +153,7 @@ export function applyMarketEvent(state: SeasonState, event: MarketEvent): Season
   if (!date || event.date !== date) throw new Error('Continue to the next scheduled recruitment decision.');
   // Format 95: the draft finishes on draft day (the manager's open picks are made first, by him or his assistant).
   const drafting = draftClassOf(state, state.seasonNumber);
-  if (drafting && !isDraftComplete(drafting)) throw new Error('Finish the NBA draft before the offseason continues.');
+  if (drafting && !isDraftComplete(drafting)) throw new Error('Finish the NAL draft before the offseason continues.');
   const draftDay = pendingDraftDay(state);
   const days = (Date.parse(date) - Date.parse(state.date)) / 86_400_000;
   // Use the policy at the start of the event, including when replay reaches an upgrade boundary.
@@ -453,7 +453,7 @@ function runDraftClock(state: SeasonState): SeasonState {
 /** Format 95 (NBA step 8): the manager's draft pick ("Make pick"); the computer clubs then pick until his club is next on the clock. */
 export function makeDraftPick(state: SeasonState, playerId: string): SeasonState {
   requireWindow(state);
-  if (!managerOnTheClock(state)) throw new Error('Your club is not on the clock in the NBA draft.');
+  if (!managerOnTheClock(state)) throw new Error('Your club is not on the clock in the NAL draft.');
   return applyMarketEvent(state, { type: 'draft', date: state.date, picks: 1 + automaticPicks(state, false, 1), playerId });
 }
 

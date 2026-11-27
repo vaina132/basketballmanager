@@ -152,7 +152,7 @@ const scheduleCache = new WeakMap<CareerWorld, Map<number, readonly NbaGame[]>>(
  */
 export function nbaSchedule(world: CareerWorld, seasonNumber: number): readonly NbaGame[] {
   const nba = world.nba;
-  if (!nba) throw new Error('This world has no NBA.');
+  if (!nba) throw new Error('This world has no NAL.');
   let bySeason = scheduleCache.get(world);
   if (!bySeason) { bySeason = new Map(); scheduleCache.set(world, bySeason); }
   const known = bySeason.get(seasonNumber);
@@ -160,7 +160,7 @@ export function nbaSchedule(world: CareerWorld, seasonNumber: number): readonly 
   const matchups = nbaMatchups(nba, seasonNumber), days = nbaGameDays(seasonNumber), clubs = nba.conferences.flatMap(conference => conference.divisions.flatMap(division => division.clubIds));
   let placed: ReturnType<typeof fillDays> = null;
   for (let attempt = 0; attempt < 200 && !placed; attempt += 1) placed = fillDays(matchups, days, clubs, `${world.id}|${seasonNumber}|${attempt}`);
-  if (!placed) throw new Error('The NBA schedule could not be built.');
+  if (!placed) throw new Error('The NAL schedule could not be built.');
   const first = days[0]!, perDay = new Map<string, number>();
   const games = Object.freeze(placed.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.home < b.home ? -1 : 1).map(game => {
     const n = (perDay.get(game.date) ?? 0) + 1;

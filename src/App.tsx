@@ -150,7 +150,7 @@ import { PlayerListingControl } from './ui/PlayerListingControl'
 import { setPlayerListing } from './world/listings'
 import { proposeTrade, withdrawTradeProposal } from './world/trades'
 import { usesTrades } from './world/trades-policy'
-import { clubLogoUrl } from './ui/ClubLogo'
+import { badgeMarkup } from './ui/club-badge'
 const TransfersWorkspace = lazy(() => import('./ui/TransfersWorkspace').then(module => ({ default: module.TransfersWorkspace })))
 const SquadContracts = lazy(() => import('./ui/SquadContracts').then(module => ({ default: module.SquadContracts })))
 const ScoutingWorkspace = lazy(() => import('./ui/ScoutingWorkspace').then(module => ({ default: module.ScoutingWorkspace })))
@@ -172,9 +172,8 @@ const messageOf = (error: unknown) => error instanceof Error ? error.message : '
 const saveCodec = createWorkerSeasonCodec()
 
 function ClubMark({ id, name, fullName, color, large = false }: { id?: string; name: string; fullName?: string; color: string; large?: boolean }) {
-  const logo = clubLogoUrl(id)
-  if (logo) return <div className={`club-mark has-club-logo ${large ? 'club-mark-large' : ''}`} data-club-logo={id}><img className="club-logo-image" src={logo} alt={fullName ?? name} width={96} height={96} loading="lazy" decoding="async" /></div>
-  return <div className={`club-mark ${large ? 'club-mark-large' : ''}`} style={{ color }} aria-hidden="true"><Icon name="ball" size={large ? 30 : 21} /><span>{name.slice(0, 3).toUpperCase()}</span></div>
+  // Drawn badge (owner decision, 27 November 2026): no real logos.
+  return <div className={`club-mark has-club-logo ${large ? 'club-mark-large' : ''}`} data-club-badge={id ?? name}><svg className="club-badge-drawing" viewBox="0 0 100 100" role="img" aria-label={fullName ?? name} dangerouslySetInnerHTML={{ __html: badgeMarkup(id ?? name, name, color) }} /></div>
 }
 
 

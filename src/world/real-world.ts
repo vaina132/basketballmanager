@@ -1,4 +1,5 @@
 import type { BackgroundLeague, CareerWorld, EuropeanCompetition, EuropeanCompetitionKind, NbaConference } from '../domain/world';
+import { gameLowerClub, gameLowerLeagueName, gamePersonName } from './game-names';
 import { EUROPEAN_FORMATS, fieldFits } from './european-formats';
 import type { Team } from '../domain/types';
 import type { ClubFinanceDefinition } from '../data/development-finances';
@@ -151,7 +152,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
   const presidentNames = new Set(teams.flatMap(team => realClubPerson(team.id, 'president')?.name ?? []));
   const presidents: DevelopmentPresident[] = teams.map((team, index) => {
     const h = hash(team.id);
-    return { clubId: team.id, name: realClubPerson(team.id, 'president')?.name ?? presidentName(team.id, leagueCountry.get(team.id) ?? null, presidentNames), generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]!, traits: derivePresidentTraits(team.id) };
+    return { clubId: team.id, name: gamePresident(team.id) ?? presidentName(team.id, leagueCountry.get(team.id) ?? null, presidentNames), generosity: (1 + (h >>> 8) % 5) as DevelopmentPresident['generosity'], seasonCapital: capitals[index % capitals.length]!, traits: derivePresidentTraits(team.id) };
   });
   // Step 3.4b: each league's real postseason, when every chosen league's size fits its format (all or none).
   const formats = competitions.map(item => [item.id, postseasonFormatFor(item.country ?? 'Other', item.tier)] as const);
@@ -173,7 +174,7 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     positionSource: byId.get(playerId)?.profileEvidence?.positionSource ?? (byId.get(playerId)?.estimated.includes('game_position') ? 'estimated' as const : 'unverified' as const),
     ...(byId.get(playerId)?.nationality ? { nationality: byId.get(playerId)!.nationality! } : {}) });
   const domesticWorld: CareerWorld = {
-    id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : nbaLeague ? `NBA and European leagues ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
+    id: realWorldId(pack, competitions.length === 1 ? competition.id : `leagues-${hash(competitions.map(item => item.id).sort().join('|')).toString(16)}`), name: competitions.length === 1 ? `${competition.name} ${competition.season}` : nbaLeague ? `NAL and European leagues ${competition.season}` : `European domestic leagues ${competition.season}`, source: 'real-data-pack', rosterModel: FULL_ROSTER_MODEL, startDate: DEVELOPMENT_WORLD.startDate,
     domesticLeagues: competitions.map(item => ({ id: item.id, name: item.name, country: item.country ?? 'Other', tier: item.tier, clubIds: [...item.clubIds], standingsRule: standingsRuleFor(item.country ?? 'Other', item.tier), ...(postseasons ? { postseason: postseasons.get(item.id)! } : {}) })),
     clubs: teams,
     playerProfiles: Object.fromEntries(teams.flatMap(team => team.players.map(player => [player.id, profileOf(player.id)]))),
@@ -195,7 +196,8 @@ export function worldFromPack(original: DataPack, competitionId: string | readon
     const own = domesticWorld.domesticLeagues!.filter(league => league.country === list.country);
     if (!own.length || NO_LOWER_DIVISION_COUNTRIES.includes(list.country) || list.tier !== Math.max(...own.map(league => league.tier)) + 1) return [];
     const slug = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return [{ country: list.country, tier: list.tier, name: list.name, clubs: list.clubs.map(item => ({ id: `lower-${slug(list.country)}-${slug(item.name)}`.slice(0, 80), name: item.name, shortName: item.shortName, color: item.color ?? LOWER_DIVISION_COLOUR })) }];
+    // Game names (owner decision, 27 November 2026); ids stay those of the real names.
+    return [{ country: list.country, tier: list.tier, name: gameLowerLeagueName(list.name), clubs: list.clubs.map(item => ({ id: `lower-${slug(list.country)}-${slug(item.name)}`.slice(0, 80), ...gameLowerClub(list.country, item), color: item.color ?? LOWER_DIVISION_COLOUR })) }];
   });
   const world = lowerLists.length ? withLowerDivisions(domesticWorld, lowerLists) : domesticWorld;
   // Format 62 (sprint 4): every club's money follows researched club budgets, once the world has all its clubs.
@@ -265,9 +267,13 @@ export interface EuropeanEntrant {
   venue?: string | null;
 }
 
+/** A real president's game name, when the club has a real president. */
+const gamePresident = (clubId: string): string | undefined => { const name = realClubPerson(clubId, 'president')?.name; return name === undefined ? undefined : gamePersonName(name); };
+
 /** The competition kind from a provider's competition name (EuroLeague, EuroCup, Basketball Champions League). */
 export function europeanKind(name: string): EuropeanCompetitionKind | null {
-  return /euro\s*league/i.test(name) ? 'euroleague' : /euro\s*cup/i.test(name) ? 'eurocup' : /champions/i.test(name) ? 'bcl' : null;
+  // Real names and the game's own (owner decision, 27 November 2026).
+  return /euro\s*league|euro elite league/i.test(name) ? 'euroleague' : /euro\s*cup|euro challenge cup/i.test(name) ? 'eurocup' : /champions|continental basketball cup/i.test(name) ? 'bcl' : null;
 }
 
 /** The average position-weighted overall rating of a squad's best eight (as in career setup). */

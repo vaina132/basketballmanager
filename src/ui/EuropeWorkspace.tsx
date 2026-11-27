@@ -107,7 +107,7 @@ export function InternationalWorkspace({ season, competitionId, onCompetitionCha
       {entry.tables.filter(group => group.rows.length).length > 0 && <section className="season-standings panel" aria-labelledby="europe-tables-title">
         <header className="season-panel-heading"><h2 id="europe-tables-title">{entry.tables.length > 1 ? 'Groups' : 'Regular-season table'}</h2></header>
         {entry.tables.filter(group => group.rows.length).map(group => <div key={group.id ?? 'table'}>{group.id && <h3 className="europe-group-title">Group {group.id}</h3>}{table(group.rows, group.id ? `Group ${group.id}` : entry.competition.name)}</div>)}
-        <details className="season-table-rules"><summary>Table rules <span>FIBA default · Classification points</span></summary><p>The competition's own tie-break text has not been checked, so the game uses the FIBA Official Basketball Rules 2026, Appendix D: 2 points for a win, 1 for a loss, then the games between tied clubs.</p></details>
+        <details className="season-table-rules"><summary>Table rules <span>International default · Classification points</span></summary><p>The competition's own tie-break text has not been checked, so the game uses the FIBA Official Basketball Rules 2026, Appendix D: 2 points for a win, 1 for a loss, then the games between tied clubs.</p></details>
       </section>}
       {entry.roundOf16.some(group => group.rows.length) && <section className="season-standings panel" aria-labelledby="europe-r16-title">
         <header className="season-panel-heading"><h2 id="europe-r16-title">Round of 16</h2></header>

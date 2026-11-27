@@ -34,7 +34,7 @@ export function quoteYouthCoachHire(state: SeasonState, coachId: string, clubId 
   else if (state.status !== 'active' || state.round === seasonRounds(state)) reason = 'Academy training resumes next season. Hire a youth coach while a training week remains.';
   else if (!coach || !state.clubs.some(club => club.id === clubId)) reason = 'Choose a youth coach and club from this career.';
   // NBA step 4: NBA clubs have no academy, so no youth coach.
-  else if (!clubHasAcademy(worldOf(state), clubId)) reason = 'NBA clubs have no academy or youth coach.';
+  else if (!clubHasAcademy(worldOf(state), clubId)) reason = 'NAL clubs have no academy or youth coach.';
   else if (getClubYouthCoach(state, clubId)) reason = 'The youth-coach position is already occupied.';
   else if (!staffCanJoin(state, kept, state.youth.contracts.some(contract => contract.coachId === coachId && contract.seasonNumber === state.seasonNumber && contract.releasedRound === null), () => availableYouthCoaches(state).some(coach => coach.id === coachId))) reason = 'This youth coach already has an active club contract.';
   // Format 84: a computer club's minimum appointment is not refused for money.

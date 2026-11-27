@@ -103,7 +103,7 @@ describe('NBA world builder', () => {
 
   it('plays NBA games under the NBA rules and every other game under FIBA\'s, alone or with European leagues', () => {
     const combined = worldFromPack(nbaPack([SPAIN]), ['acb', 'nba']);
-    expect(combined.name).toBe('NBA and European leagues 2026-27');
+    expect(combined.name).toBe('NAL and European leagues 2026-27');
     expect(combined.domesticLeagues!.map(league => league.id)).toEqual(['acb', 'nba']);
     expect(fixtureRuleset({ world: combined }, { homeClubId: 'nba-bos', awayClubId: 'nba-lal' })).toBe('nba-2026b');
     expect(fixtureRuleset({ world: combined }, { homeClubId: 'acb-1', awayClubId: 'acb-2' })).toBeUndefined();
@@ -127,7 +127,7 @@ describe('NBA careers (new careers only, format 90)', () => {
   const world = worldFromPack(nbaPack(), 'nba');
 
   it('needs the NBA option, opens without academies or youth coaches at NBA clubs, and refuses formats before 90', () => {
-    expect(() => createSeason({ seed: 2, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS, nba: false })).toThrow(/NBA/);
+    expect(() => createSeason({ seed: 2, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS, nba: false })).toThrow(/NAL/);
     const state = createSeason({ seed: 2, world, managedClubId: 'nba-bos', ...NEW_CAREER_SYSTEMS });
     expect(worldOf(state).nba?.leagueId).toBe('nba');
     expect(state.academy.prospects).toEqual([]);

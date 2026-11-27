@@ -159,13 +159,13 @@ export function nbaOfferOrder(context: CareerPlayerContext, playerId: string, le
 export function nbaTransferReason(context: WorldContext, sellerClubId: string, buyerClubId: string, inSeason = false, releaseClause = false, draftRights = false): string | null {
   if (!usesNbaMoves(context)) return null;
   const world = context.world!, seller = isNbaClub(world, sellerClubId), buyer = isNbaClub(world, buyerClubId);
-  if (seller && buyer) return 'NBA clubs exchange players under contract only by trade.';
-  if (seller) return 'NBA players under contract are not sold to European clubs; they move when their contract ends.';
+  if (seller && buyer) return 'NAL clubs exchange players under contract only by trade.';
+  if (seller) return 'NAL players under contract are not sold to European clubs; they move when their contract ends.';
   if (!buyer) return null;
-  if (inSeason) return 'During the season an NBA club signs free agents only, on minimum contracts.';
+  if (inSeason) return 'During the season an NAL club signs free agents only, on minimum contracts.';
   // Format 95 (draft-and-stash): the club holding his draft rights buys him out of his European contract in the offseason.
   if (draftRights) return null;
-  if (!releaseClause) return 'A European player under contract joins an NBA club only through his release clause; otherwise he waits for his contract to end.';
+  if (!releaseClause) return 'A European player under contract joins an NAL club only through his release clause; otherwise he waits for his contract to end.';
   return null;
 }
 
@@ -181,11 +181,11 @@ export function nbaEligibilityReason(context: CareerPlayerContext & { employment
   // Format 95 (NBA step 8): only the club holding a player's draft rights may sign him; a generated draft prospect went
   // through the draft (undrafted, he may sign with any NBA club, as American players do).
   const holder = context.employment ? draftRightsHolder(context as Parameters<typeof draftRightsHolder>[0], playerId) : null;
-  if (holder) return holder === clubId ? null : 'Another NBA club holds this player\'s draft rights.';
+  if (holder) return holder === clubId ? null : 'Another NAL club holds this player\'s draft rights.';
   if (draftProspect(context, playerId)) return null;
   const age = context.date ? getCareerPlayerAge(context, playerId, context.date) : null;
-  if (age !== null && age < NBA_MOVES_RULES.europeanMinAge) return `European players under ${NBA_MOVES_RULES.europeanMinAge} join the NBA through the draft.`;
-  if (nbaValue(context, playerId) < NBA_MOVES_RULES.europeanLevel) return 'NBA clubs sign European players only at the level of an NBA rotation player.';
+  if (age !== null && age < NBA_MOVES_RULES.europeanMinAge) return `European players under ${NBA_MOVES_RULES.europeanMinAge} join the NAL through the draft.`;
+  if (nbaValue(context, playerId) < NBA_MOVES_RULES.europeanLevel) return 'NAL clubs sign European players only at the level of an NAL rotation player.';
   return null;
 }
 

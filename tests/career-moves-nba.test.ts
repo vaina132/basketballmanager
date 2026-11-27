@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { gamePersonName } from '../src/world/game-names';
 import type { SeasonState } from '../src/domain/season';
 import { realIdNbaPack, realNbaClubId, NBA_CLUB_IDS } from './helpers/nba-pack';
 import { worldFromPack } from '../src/world/real-world';
@@ -83,7 +84,7 @@ describe('NBA careers in a combined world (format 91)', () => {
     expect(worldOf(complete).nbaJobs).toBe(true);
     expect(coachPlaces(opening).clubs[MIA]).toBe(MANAGER_COACH);
     expect(coachPlaces(opening).free).toContain('coach-erik-spoelstra');
-    const names = new Set(REAL_NBA_COACHES.map(coach => coach.name));
+    const names = new Set(REAL_NBA_COACHES.map(coach => gamePersonName(coach.name)));
     const held = nbaIds.filter(id => id !== MIA).map(id => clubHeadCoach(opening, id)).filter(coach => coach && coach !== MANAGER_COACH && names.has(coach.name));
     expect(held).toHaveLength(29);
   });

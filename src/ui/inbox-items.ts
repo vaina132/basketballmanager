@@ -164,7 +164,7 @@ export function getInboxItems(season: SeasonState): InboxItem[] {
   items.push(...careerMoveItems(season))
   items.push(...bidInboxItems(season))
   // Format 93: one of your players signs an NBA contract.
-  for (const departure of nbaDeparturesFrom(season, clubId)) items.push({ id: `nba-${departure.contractId}`, date: departure.date, category: 'players', title: `${getCareerPlayer(season, departure.playerId).name} signs in the NBA`, detail: `He joins ${season.clubs.find(club => club.id === departure.toClubId)?.name ?? worldOf(season).clubs.find(club => club.id === departure.toClubId)?.name ?? 'an NBA club'}${departure.fee !== null ? `; his release clause brings the club ${money(departure.fee)}` : ' as a free agent'}.`, needsAction: false, target: 'squad', playerId: departure.playerId })
+  for (const departure of nbaDeparturesFrom(season, clubId)) items.push({ id: `nba-${departure.contractId}`, date: departure.date, category: 'players', title: `${getCareerPlayer(season, departure.playerId).name} signs in the NAL`, detail: `He joins ${season.clubs.find(club => club.id === departure.toClubId)?.name ?? worldOf(season).clubs.find(club => club.id === departure.toClubId)?.name ?? 'an NAL club'}${departure.fee !== null ? `; his release clause brings the club ${money(departure.fee)}` : ' as a free agent'}.`, needsAction: false, target: 'squad', playerId: departure.playerId })
   items.push(...draftInboxItems(season))
   for (const notice of clubRetirementsThisSeason(season)) items.push({ id: `retirement-${notice.playerId}`, date: notice.retiredOn, category: 'players', title: `${getCareerPlayer(season, notice.playerId).name} retires`, detail: 'The retirement takes effect for this season.', needsAction: false, target: 'squad', playerId: notice.playerId })
 
@@ -187,9 +187,9 @@ export function draftInboxItems(season: SeasonState): InboxItem[] {
   const clubId = season.managedClubId
   if (!clubId || !season.draft) return []
   return season.draft.classes.flatMap(entry => entry.picks.filter(pick => contractForSeason(season.employment, pick.playerId, entry.seasonNumber)?.clubId === clubId && pick.clubId !== clubId).map(pick => {
-    const name = getCareerPlayer(season, pick.playerId).name, nba = season.clubs.find(club => club.id === pick.clubId)?.name ?? 'An NBA club'
+    const name = getCareerPlayer(season, pick.playerId).name, nba = season.clubs.find(club => club.id === pick.clubId)?.name ?? 'An NAL club'
     const stays = (season.draft!.rights ?? []).some(right => right.playerId === pick.playerId && right.seasonNumber === entry.seasonNumber)
-    return { id: `draft-${entry.seasonNumber}-${pick.pick}`, date: entry.date, category: 'players' as const, title: `${name} drafted by ${nba}`, detail: stays ? `Pick ${pick.pick} of the NBA draft. He stays with you while under contract; ${nba} holds his draft rights and may offer to buy him out in an offseason.` : `Pick ${pick.pick} of the NBA draft. His contract with you ends, and he joins ${nba} on a rookie contract.`, needsAction: false, target: 'squad' as const, playerId: pick.playerId }
+    return { id: `draft-${entry.seasonNumber}-${pick.pick}`, date: entry.date, category: 'players' as const, title: `${name} drafted by ${nba}`, detail: stays ? `Pick ${pick.pick} of the NAL draft. He stays with you while under contract; ${nba} holds his draft rights and may offer to buy him out in an offseason.` : `Pick ${pick.pick} of the NAL draft. His contract with you ends, and he joins ${nba} on a rookie contract.`, needsAction: false, target: 'squad' as const, playerId: pick.playerId }
   }))
 }
 

@@ -45,7 +45,7 @@ describe('the EuroLeague jobs marker (format 100)', () => {
     const state = createSeason({ seed: 5, world, managedClubId: 'acb-9', manager, ...NEW_CAREER_SYSTEMS });
     expect(worldOf(state).euroleagueJobs).toBe(true);
     expect(usesEuroleagueJobs(worldOf(state))).toBe(true);
-    expect(euroleagueJobsNote(worldOf(state))).toMatch(/EuroLeague are the biggest jobs/);
+    expect(euroleagueJobsNote(worldOf(state))).toMatch(/Euro Elite League are the biggest jobs/);
     const older = createSeason({ seed: 5, world, managedClubId: 'acb-9', manager, ...NEW_CAREER_SYSTEMS, euroleagueJobs: false });
     expect(worldOf(older).euroleagueJobs).toBeUndefined();
     expect(euroleagueJobsNote(worldOf(older))).toBe('');
@@ -60,7 +60,7 @@ describe('the EuroLeague jobs marker (format 100)', () => {
     expect(worldOf(createSeason({ seed: 5, world: nbaWorld, managedClubId: 'acb-9', ...NEW_CAREER_SYSTEMS })).euroleagueJobs).toBeUndefined();
     expect(() => validateWorld({ ...nbaWorld, euroleagueJobs: true })).toThrow(/euroleagueJobs/);
     expect(createSeason({ seed: 5, ...NEW_CAREER_SYSTEMS }).world?.euroleagueJobs).toBeUndefined();
-    expect(() => createSeason({ seed: 5, world, euroleagueJobs: 'yes' as unknown as boolean })).toThrow(/EuroLeague jobs setting/);
+    expect(() => createSeason({ seed: 5, world, euroleagueJobs: 'yes' as unknown as boolean })).toThrow(/Euro Elite League jobs setting/);
   });
 
   it('keeps the marker through a strict round trip and refuses it before format 100', () => {

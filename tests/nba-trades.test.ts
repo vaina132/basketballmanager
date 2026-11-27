@@ -84,7 +84,7 @@ describe('trade rules', () => {
     const side = (clubId: string, ids: string[]): TradeSide => ({ clubId, playerIds: ids });
     expect(checkTrade(state, view, side(BOS, [bos[5]!]), side('nba-nyk', [nyk[5]!, nyk[6]!])).reason).toMatch(/13-15 players/);
     expect(checkTrade(state, view, side(BOS, bos.slice(0, 4)), side('nba-nyk', nyk.slice(0, 4))).reason).toMatch(/one to 3 players/);
-    expect(checkTrade(state, view, side(BOS, [bos[0]!]), side(BOS, [bos[1]!])).reason).toMatch(/two different NBA clubs/);
+    expect(checkTrade(state, view, side(BOS, [bos[0]!]), side(BOS, [bos[1]!])).reason).toMatch(/two different NAL clubs/);
     expect(checkTrade(state, view, side(BOS, [nyk[0]!]), side('nba-nyk', [bos[0]!])).reason).toMatch(/registered with his club/);
   });
 
@@ -213,7 +213,7 @@ describe('the format guard and European careers', () => {
     const envelope = JSON.parse(serializeSeason(state));
     envelope.formatVersion = 92; envelope.state.schemaVersion = 92;
     expect(() => parseSeason(JSON.stringify(envelope))).toThrow(/format 9[345] or later/);  // The format-93 moves and format-95 draft markers are refused first.
-    expect(() => createSeason({ seed: 3, world, managedClubId: BOS, ...NEW_CAREER_SYSTEMS, nbaTrades: 'yes' as unknown as boolean })).toThrow(/NBA trades/);
+    expect(() => createSeason({ seed: 3, world, managedClubId: BOS, ...NEW_CAREER_SYSTEMS, nbaTrades: 'yes' as unknown as boolean })).toThrow(/NAL trades/);
   });
 
   it('keeps worlds without the NBA, and NBA careers without the option, free of trades', () => {

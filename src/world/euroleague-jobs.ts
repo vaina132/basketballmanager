@@ -48,5 +48,5 @@ export function euroleagueVacancyRequirement(position: number, leagueClubs: numb
 export function euroleagueJobsNote(world: CareerWorld | undefined | null): string {
   if (!usesEuroleagueJobs(world)) return '';
   const { bestRequirement, weakestRequirement, premium } = EUROLEAGUE_JOB_RULES;
-  return ` Clubs playing in this season's EuroLeague are the biggest jobs: they offer first, and look for ${premium} points more than other clubs in the same place, and never less than ${weakestRequirement} (${bestRequirement} at the top of their table).`;
+  return ` Clubs playing in this season's Euro Elite League are the biggest jobs: they offer first, and look for ${premium} points more than other clubs in the same place, and never less than ${weakestRequirement} (${bestRequirement} at the top of their table).`;
 }

@@ -229,7 +229,7 @@ export function drawLottery(seed: number, seasonNumber: number, clubs: readonly 
 export function draftOrder(lottery: DraftLottery, worstFirst: readonly string[]): string[] {
   const lotteryClubs = new Set(lottery.clubs);
   const first = [...lottery.drawn, ...lottery.clubs.filter(clubId => !lottery.drawn.includes(clubId)), ...worstFirst.filter(clubId => !lotteryClubs.has(clubId))];
-  if (first.length !== NBA_DRAFT_RULES.picksPerRound || new Set(first).size !== first.length) throw new Error('The draft order needs the NBA\'s thirty clubs.');
+  if (first.length !== NBA_DRAFT_RULES.picksPerRound || new Set(first).size !== first.length) throw new Error('The draft order needs the NAL\'s thirty clubs.');
   return [...first, ...worstFirst];
 }
 

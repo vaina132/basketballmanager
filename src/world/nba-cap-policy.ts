@@ -55,8 +55,8 @@ export function nbaSigningCheck(state: CareerPlayerContext & Pick<SeasonState, '
   const age = ageOn(state, input.playerId, state.date);
   const minimum = nbaMinimumWage(age), maximum = nbaMaximumWage(age);
   const result = (route: NbaCapRoute | null, reason: string | null): NbaSigningCheck => ({ route, reason, minimum, maximum });
-  if (input.seasonWage < minimum) return result(null, `An NBA contract pays at least the player's minimum salary (${euros(minimum)} a season at his experience).`);
-  if (input.seasonWage > maximum) return result(null, `An NBA maximum contract for a player of his age is ${euros(maximum)} a season.`);
+  if (input.seasonWage < minimum) return result(null, `An NAL contract pays at least the player's minimum salary (${euros(minimum)} a season at his experience).`);
+  if (input.seasonWage > maximum) return result(null, `An NAL maximum contract for a player of his age is ${euros(maximum)} a season.`);
   const own = clubContractsForSeason(state.employment, input.clubId, state.seasonNumber).some(contract => contract.playerId === input.playerId);
   const midLevelUsed = input.inSeason || nbaMidLevelUsed(state, input.clubId, input.seasonNumber, input.excludeOfferId);
   const route = nbaSigningRoute({ payrollBefore: input.payrollBefore, seasonWage: input.seasonWage, minimum, ownPlayer: own && !input.inSeason, midLevelUsed });

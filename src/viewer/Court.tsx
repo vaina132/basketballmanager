@@ -133,7 +133,7 @@ const CourtFloor = memo(function CourtFloor({ nba = false }: { nba?: boolean }) 
       <g fill="none" stroke="#f8f1dc" strokeWidth=".0035">
         <rect width="1" height="1" /><path d="M.5 0v1" /><ellipse cx=".5" cy=".5" rx=".0643" ry=".12" />
         {nba ? <>
-          {/* NBA floor (28.65 x 15.24 m): 4.9 m lane to 5.79 m, 1.8 m circles, 7.24 m arc with 6.71 m corners. */}
+          {/* NAL floor (28.65 x 15.24 m): 4.9 m lane to 5.79 m, 1.8 m circles, 7.24 m arc with 6.71 m corners. */}
           <path d="M0 .34h.202v.32H0m1-.32H.798v.32H1" />
           <ellipse cx=".202" cy=".5" rx=".0628" ry=".118" /><ellipse cx=".798" cy=".5" rx=".0628" ry=".118" />
           <path d="M0 .06h.149a.2527 .475 0 0 1 0 .88H0m1-.88H.851a.2527 .475 0 0 0 0 .88H1" />

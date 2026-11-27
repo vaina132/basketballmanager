@@ -58,7 +58,7 @@ function eurocupKnockout(groupSize: number): PostseasonFormat {
   const eighths = pairs.flatMap(([x, y], half) => [[at(x, 1), at(y, 4)], [at(y, 2), at(x, 3)], [at(y, 1), at(x, 4)], [at(x, 2), at(y, 3)]].map(([a, b], index) => series(`ef-${ids[half * 4 + index]}`, 'round-of-16', 'eighth', a!, b!)));
   const quarters = ['a', 'b', 'c', 'd'].map((id, index) => series(`qf-${id}`, 'quarter-final', 'quarter', { winner: `ef-${ids[2 * index]}` }, { winner: `ef-${ids[2 * index + 1]}` }));
   return {
-    id: 'eurocup-2026-1', label: 'EuroCup playoffs', verified: true, source: EUROCUP_SOURCES,
+    id: 'eurocup-2026-1', label: 'Euro Challenge Cup playoffs', verified: true, source: EUROCUP_SOURCES,
     series: [...eighths, ...quarters, series('sf-a', 'semi-final', 'semi', { winner: 'qf-a' }, { winner: 'qf-b' }), series('sf-b', 'semi-final', 'semi', { winner: 'qf-c' }, { winner: 'qf-d' }), series('final', 'final', 'final', { winner: 'sf-a' }, { winner: 'sf-b' })],
     champion: { series: 'final' }, promoted: [], relegated: [],
   };
@@ -83,7 +83,7 @@ function bclKnockout(): PostseasonFormat {
   const at = (group: number, place: number): PostseasonRef => ({ place: group * 4 + place, rank: place });
   const qf = (id: string, a: PostseasonRef, b: PostseasonRef): PostseasonSeriesSpec => ({ id, stage: 'quarter-final', step: 'quarter', bestOf: 3, a, b });
   return {
-    id: 'bcl-2026-1', label: 'Basketball Champions League quarter-finals and Final Four', verified: true, source: BCL_SOURCES,
+    id: 'bcl-2026-1', label: 'Continental Basketball Cup quarter-finals and Final Four', verified: true, source: BCL_SOURCES,
     series: [
       qf('qf-a', at(0, 1), at(1, 2)), qf('qf-b', at(1, 1), at(0, 2)), qf('qf-c', at(2, 1), at(3, 2)), qf('qf-d', at(3, 1), at(2, 2)),
       { id: 'sf-a', stage: 'semi-final', step: 'semi', bestOf: 1, a: { winner: 'qf-a' }, b: { winner: 'qf-c' }, neutral: true },
@@ -99,13 +99,13 @@ const r16 = (group: string, day: number, first: number, second: number, playIns:
 
 export const EUROPEAN_FORMATS: Readonly<Record<EuropeanFormatId, EuropeanFormat>> = Object.freeze({
   'euroleague-2026-1': {
-    id: 'euroleague-2026-1', kind: 'euroleague', label: 'EuroLeague', source: EUROLEAGUE_SOURCES,
+    id: 'euroleague-2026-1', kind: 'euroleague', label: 'Euro Elite League', source: EUROLEAGUE_SOURCES,
     clubs: { min: 10, max: 20 },
     // Thursdays of weeks 3-32 (24 September 2026 to 15 April 2027); Tuesday and Thursday in double-round weeks.
     regular: { firstWeek: 3, lastWeek: 32, day: 5, doubleDays: [3, 5] },
     standingsRule: 'fiba-2026-d',
     knockout: {
-      id: 'euroleague-2026-1', label: 'EuroLeague Play-In, Playoffs and Final Four', verified: true, source: EUROLEAGUE_SOURCES,
+      id: 'euroleague-2026-1', label: 'Euro Elite League Play-In, Playoffs and Final Four', verified: true, source: EUROLEAGUE_SOURCES,
       // Play-In 7 v 8 and 9 v 10, then the loser of 7 v 8 against the winner of 9 v 10; playoffs 1-8, 2-7, 3-6, 4-5 best of
       // five; Final Four semi-finals (1-8 winner v 4-5 winner, 2-7 v 3-6) and final at one venue, no third-place game.
       series: [...playIn(7, 8, 9, 10), ...bracket([...places(1, 2, 3, 4, 5, 6), { winner: 'pi-a', rank: 7 }, { winner: 'pi-c', rank: 8 }], [5, 1, 1], { neutralFrom: 'semi-final' })],
@@ -115,7 +115,7 @@ export const EUROPEAN_FORMATS: Readonly<Record<EuropeanFormatId, EuropeanFormat>
     slots: [{ week: 33, day: 3 }, { week: 33, day: 5 }, { week: 34, day: 3 }, { week: 34, day: 5 }, { week: 35, day: 3 }, { week: 35, day: 5 }, { week: 36, day: 3 }, { week: 38, day: 3 }, { week: 38, day: 5 }],
   },
   'eurocup-2026-1': {
-    id: 'eurocup-2026-1', kind: 'eurocup', label: 'EuroCup', source: EUROCUP_SOURCES,
+    id: 'eurocup-2026-1', kind: 'eurocup', label: 'Euro Challenge Cup', source: EUROCUP_SOURCES,
     clubs: { min: 16, max: 32 },
     // Fourteen rounds in weeks 4-19 (29 September 2026 to 13 January 2027), two weeks without a round spread evenly.
     regular: { firstWeek: 4, lastWeek: 19, day: 3, groups: [{ id: 'A', day: 3 }, { id: 'B', day: 3 }, { id: 'C', day: 4 }, { id: 'D', day: 4 }] },
@@ -127,7 +127,7 @@ export const EUROPEAN_FORMATS: Readonly<Record<EuropeanFormatId, EuropeanFormat>
       { week: 30, day: 4 }, { week: 31, day: 3 }, { week: 31, day: 5 }, { week: 33, day: 4 }, { week: 34, day: 3 }, { week: 34, day: 5 }],
   },
   'bcl-2026-1': {
-    id: 'bcl-2026-1', kind: 'bcl', label: 'Basketball Champions League', source: BCL_SOURCES,
+    id: 'bcl-2026-1', kind: 'bcl', label: 'Continental Basketball Cup', source: BCL_SOURCES,
     clubs: { min: 32, max: 54 }, fields: BCL_FIELDS,
     regular: { firstWeek: 5, lastWeek: 16, day: 3, weeks: [5, 7, 9, 11, 14, 16], groups: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((id, index) => ({ id, day: index < 4 ? 3 : 4 })) },
     standingsRule: 'fiba-2026-d',

@@ -30,7 +30,7 @@ export function nationalInboxItems(season: SeasonState): InboxItem[] {
     items.push({
       id: offer.id, date: offer.date, category: 'board', target: 'national', offerId: offer.id, needsAction: open,
       title: open ? `Job offer · ${team.name} national team` : offer.status === 'accepted' ? `You accepted ${team.name}'s offer` : `${team.name}'s offer ${offer.status === 'declined' ? 'declined' : 'expired'}`,
-      detail: open ? `The ${team.name} federation needs a head coach and offers you the job. You keep your club job: national games are in the FIBA windows, when club leagues pause. ${contract} Answer by ${medicalDate(offer.expiresOn)}.` : `The ${team.name} federation's offer of its head coach job is ${offer.status === 'open' ? 'expired' : offer.status}.`,
+      detail: open ? `The ${team.name} federation needs a head coach and offers you the job. You keep your club job: national games are in the international windows, when club leagues pause. ${contract} Answer by ${medicalDate(offer.expiresOn)}.` : `The ${team.name} federation's offer of its head coach job is ${offer.status === 'open' ? 'expired' : offer.status}.`,
     })
   }
   for (const event of national.events) {

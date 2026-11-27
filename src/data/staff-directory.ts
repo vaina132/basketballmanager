@@ -1,4 +1,5 @@
 import type { AssistantCoach } from '../domain/assistant';
+import { gamePersonName } from '../world/game-names';
 import type { Coach } from '../domain/coaching';
 import type { FitnessCoach } from '../domain/fitness';
 import type { Physio } from '../domain/physio';
@@ -78,7 +79,8 @@ function realAssistants(): readonly (AssistantCoach & { clubId: string })[] {
     const id = `assistant-real-${person.clubId.replace(/^club-/, '').slice(0, 8)}`;
     nationalities.set(id, (person.nationality && NATIONALITY_CODES[person.nationality]) ?? person.country);
     const terms = DEVELOPMENT_ASSISTANTS[Math.min(DEVELOPMENT_ASSISTANTS.length - 1, person.tier === 1 ? 8 : 6)]!;
-    return Object.freeze({ ...terms, id, name: person.name, clubId: person.clubId });
+    // Game name (owner decision, 27 November 2026).
+    return Object.freeze({ ...terms, id, name: gamePersonName(person.name), clubId: person.clubId });
   }));
 }
 

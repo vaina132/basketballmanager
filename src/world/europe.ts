@@ -195,13 +195,13 @@ function qualificationFormat(sizes: readonly [number, number]): PostseasonFormat
   });
   // Listed step by step, so both tournaments end together.
   const series = steps.flatMap(step => trees.flat().filter(spec => spec.step === step));
-  return { id: 'bcl-2026-1', label: 'Basketball Champions League qualification', verified: true, source: EUROPEAN_FORMATS['bcl-2026-1'].source, series, champion: { series: 'q1-final' }, promoted: [], relegated: [] };
+  return { id: 'bcl-2026-1', label: 'Continental Basketball Cup qualification', verified: true, source: EUROPEAN_FORMATS['bcl-2026-1'].source, series, champion: { series: 'q1-final' }, promoted: [], relegated: [] };
 }
 
 const PLAY_INS: readonly (readonly [number, number])[] = [[0, 1], [1, 0], [2, 3], [3, 2], [4, 5], [5, 4], [6, 7], [7, 6]];
 /** Play-ins A2-B3, B2-A3 ... H2-G3, best of three with the second-placed club at home in games 1 and 3. */
 const PLAY_IN_FORMAT: PostseasonFormat = {
-  id: 'bcl-2026-1', label: 'Basketball Champions League play-ins', verified: true, source: 'See the BCL format.',
+  id: 'bcl-2026-1', label: 'Continental Basketball Cup play-ins', verified: true, source: 'See the BCL format.',
   series: PLAY_INS.map(([second, third], index) => ({ id: `pi-${'abcdefgh'[index]}`, stage: 'play-in', step: 'play-in', bestOf: 3, a: { place: second * 4 + 2, rank: 1 }, b: { place: third * 4 + 3, rank: 2 } })),
   champion: { series: 'pi-a' }, promoted: [], relegated: [],
 };
@@ -236,7 +236,7 @@ export function bclDraw(world: CareerWorld, seed: number, seasonNumber: number, 
     }
     return false;
   };
-  if (!assign(0, 0)) throw new Error('The BCL draw cannot keep clubs of one country apart.');
+  if (!assign(0, 0)) throw new Error('The Continental Basketball Cup draw cannot keep clubs of one country apart.');
   cache.set(key, groups);
   return groups;
 }

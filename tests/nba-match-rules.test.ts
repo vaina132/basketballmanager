@@ -34,7 +34,7 @@ describe('NBA rules in the match engine', () => {
     expect(nba.ruleset).toBe('nba-2026');
     expect(rulesOf(nba)).toBe(NBA_2026);
     expect(nba.clockSeconds).toBe(720);
-    expect(nba.events[0]!.text).toMatch(/NBA rules/);
+    expect(nba.events[0]!.text).toMatch(/NAL rules/);
     expect(calibrationFor(FIBA_2024).PLAYS).toBe(calibrationFor(rulesOf(fiba)).PLAYS);
   });
 

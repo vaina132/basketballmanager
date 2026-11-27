@@ -35,7 +35,7 @@ interface SeasonWorkspaceProps {
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`))
 /** NBA step 5: the NBA's names for its postseason rounds. */
-export const NBA_STAGE_NAMES: Partial<Record<NonNullable<SeasonFixture['stage']>, string>> = { 'play-in': 'Play-in', 'round-of-16': 'First round', 'quarter-final': 'Conference semi-finals', 'semi-final': 'Conference finals', final: 'NBA Finals' }
+export const NBA_STAGE_NAMES: Partial<Record<NonNullable<SeasonFixture['stage']>, string>> = { 'play-in': 'Play-in', 'round-of-16': 'First round', 'quarter-final': 'Conference semi-finals', 'semi-final': 'Conference finals', final: 'NAL Finals' }
 const STAGE_NAMES: Record<NonNullable<SeasonFixture['stage']>, string> = { qualifying: 'Qualifying', 'play-in': 'Play-in', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-final', 'semi-final': 'Semi-final', 'third-place': 'Third place', final: 'Final', 'play-out': 'Play-out' }
 const difference = (value: number) => value > 0 ? `+${value}` : String(value)
 const minutes = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
@@ -56,23 +56,23 @@ export function SeasonWorkspace(props: SeasonWorkspaceProps) {
 /** Verified league rules (step 3.4e-2): the table label, an optional points column and a short explanation. */
 const LEAGUE_RULES = {
   'acb-art7-2026': {
-    label: 'ACB · Wins', points: null, pointsTitle: '',
+    label: 'Liga Española · Wins', points: null, pointsTitle: '',
     text: [
-      'ACB Normas Internas 2026/2027, articles 6.2 and 7. Most wins, or win percentage while clubs have played different numbers of games; level clubs that have played fewer games come first.',
+      'The league\'s own rules. Most wins, or win percentage while clubs have played different numbers of games; level clubs that have played fewer games come first.',
       'Level clubs that have met home and away are ranked by their games against each other (wins, points difference and, for three or more clubs, points scored), then overall points difference, points scored and the sum of per-game scoring quotients; otherwise only the overall criteria count. A tie the rules settle by last season\'s final position uses a reproducible draw; “=” marks an unresolved tie during the season.',
     ],
   },
   'bbl-art20-2026': {
-    label: 'BBL · Wertungspunkte', points: (row: { wins: number; losses: number }) => `${2 * row.wins}:${2 * row.losses}`, pointsTitle: 'Wertungspunkte: 2:0 for a win, 0:2 for a loss',
+    label: 'Deutsche Basketball Liga · Wertungspunkte', points: (row: { wins: number; losses: number }) => `${2 * row.wins}:${2 * row.losses}`, pointsTitle: 'Wertungspunkte: 2:0 for a win, 0:2 for a loss',
     text: [
-      'easyCredit BBL Spielordnung 2026/2027, §§ 16 and 20. A win scores 2:0 points and a loss 0:2.',
+      'The league\'s own rules. A win scores 2:0 points and a loss 0:2.',
       'Level clubs are ranked by the points in their games against each other, then points difference in those games, overall points difference and the scoring quotient. The procedure restarts for clubs still level; lots decide a final tie (a reproducible draw here), and “=” marks an unresolved tie during the season.',
     ],
   },
   'fip-art62-2026': {
-    label: 'FIP · Points', points: (row: { wins: number }) => String(2 * row.wins), pointsTitle: 'Points: 2 for a win, none for a loss',
+    label: 'Serie A Basket · Points', points: (row: { wins: number }) => String(2 * row.wins), pointsTitle: 'Points: 2 for a win, none for a loss',
     text: [
-      'FIP Regolamento Esecutivo Gare, articles 60 and 62. Two points for a win, none for a loss.',
+      'The league\'s own rules. Two points for a win, none for a loss.',
       'Level clubs are ranked by their games against each other (wins, then the quotient of points scored and conceded), then the quotient over all games, restarting for clubs still level; then fewer fouls in those games and in all games. A tie the rules leave open uses a reproducible draw; “=” marks an unresolved tie during the season.',
     ],
   },
@@ -189,11 +189,11 @@ function ActiveSeason({ season, onOpenMatch, onNewGame, busy = false, leagueId: 
       <div className="season-table-scroll"><table className="season-standings-table"><thead><tr><th scope="col">#</th><th scope="col">Club</th><th scope="col" title="Played">P</th><th scope="col" title="Wins">W</th><th scope="col" title="Losses">L</th>{lnbRanking && <th scope="col" title="Wins divided by games played">Win %</th>}{fibaRanking && <th scope="col" title="Classification points: 2 for a win, 1 for a loss">Pts</th>}{leagueRule?.points && <th scope="col" title={leagueRule.pointsTitle}>Pts</th>}<th scope="col" title="Points for">PF</th><th scope="col" title="Points against">PA</th><th scope="col" title="Point difference">Diff</th></tr></thead><tbody>{standings.map(row => <tr key={row.clubId} data-club-id={row.clubId} className={row.clubId === season.managedClubId ? 'season-managed-row' : ''}>
         <td>{row.position}{row.rankingTie === 'unresolved' && <span className="season-tie-mark" title="Still tied on sporting criteria; display order only" aria-label="Still tied">=</span>}</td><th scope="row"><ClubName club={club(row.clubId)} yours={row.clubId === managedId} />{row.rankingTie === 'draw' && <span className="season-draw-label" title="Equal after all sporting tie-breaks; position decided by a reproducible draw">Draw</span>}</th><td>{row.played}</td><td className="season-wins">{row.wins}</td><td>{row.losses}</td>{lnbRanking && <td>{row.played ? `${(row.wins / row.played * 100).toFixed(1)}%` : '—'}</td>}{fibaRanking && <td className="season-wins">{classificationPoints(row)}</td>}{leagueRule?.points && <td className="season-wins">{leagueRule.points(row)}</td>}<td>{row.pointsFor}</td><td>{row.pointsAgainst}</td><td>{difference(row.difference)}</td>
       </tr>)}</tbody></table></div>
-      <details className="season-table-rules"><summary>Table rules <span>{lnbRanking ? 'LNB · Win percentage' : fibaRanking ? 'FIBA default · Classification points' : leagueRule ? leagueRule.label : 'Prototype ranking'}</span></summary>{lnbRanking ? <>
+      <details className="season-table-rules"><summary>Table rules <span>{lnbRanking ? 'Ligue · Win percentage' : fibaRanking ? 'International default · Classification points' : leagueRule ? leagueRule.label : 'Prototype ranking'}</span></summary>{lnbRanking ? <>
         <p>Win percentage comes first. Tied clubs are ranked by their results against each other, then points difference and points scored. Clubs without a direct meeting keep their overall points-difference position.</p>
         <p>Remaining ties use overall points difference, then points scored. The process restarts for any clubs still tied. A fully tied final table uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
       </> : leagueRule ? <>{leagueRule.text.map(paragraph => <p key={paragraph}>{paragraph}</p>)}</> : fibaRanking ? <>
-        <p>This league's own tie-break rules have not been verified yet, so the game uses the FIBA Official Basketball Rules 2026, Appendix D. Classification points come first: 2 for a win, 1 for a loss.</p>
+        <p>This league's own tie-break rules have not been verified yet, so the game uses the international basketball rules' default (Appendix D). Classification points come first: 2 for a win, 1 for a loss.</p>
         <p>Clubs level on points are ranked by the games between them: points, then points difference and points scored in those games, then overall points difference and points scored. The process restarts for any clubs still tied. A fully tied final table uses a reproducible draw; “=” marks an unresolved tie during the season.</p>
       </> : <p>Ranked by wins, overall point difference, points scored, then club ID. This career retains its original ranking rules.</p>}</details>
     </section>}

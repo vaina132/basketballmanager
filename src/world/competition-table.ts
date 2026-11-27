@@ -20,7 +20,7 @@ export function nbaCompetitionTables(input: Omit<TableInput, 'rule'> & { nba: re
 export function competitionTable(input: TableInput): CompetitionTableRow[] {
   if (input.rule !== undefined && !Object.hasOwn(RANKINGS, input.rule)) throw new Error('Unsupported standings rule.');
   if (input.rule === 'nba-2026') {
-    if (!input.nba) throw new Error('The NBA table needs its conferences and divisions.');
+    if (!input.nba) throw new Error('The NAL table needs its conferences and divisions.');
     return nbaCompetitionTables({ ...input, nba: input.nba }).league;
   }
   const { rows, ranked, drawKey, played, byId } = tableParts(input);

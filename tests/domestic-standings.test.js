@@ -93,7 +93,7 @@ describe('standings in careers, saves and screens', () => {
     const markup = renderToStaticMarkup(createElement(SeasonWorkspace,{...uiProps,season:state}));
     const body = markup.slice(markup.indexOf('season-standings-table'),markup.indexOf('season-table-rules'));
     expect([...body.matchAll(/data-club-id="([^"]+)"/g)].map(m=>m[1])).toEqual(ids(standings));
-    expect(markup).toContain('LNB · Win percentage');
+    expect(markup).toContain('Ligue · Win percentage');
     expect(markup).toContain('Regular-season table');
     expect(markup).toContain('Table rules');
     expect(JSON.stringify(state)).toBe(before);

@@ -82,9 +82,9 @@ function draftReason(state: SeasonState): string | null {
   const window = getMarketWindow(state);
   if (state.world?.nba?.draft !== 'nba-draft-1' || !state.draft || !window) return null;
   const entry = draftClassOf(state, state.seasonNumber);
-  if (!entry) return `The NBA draft is on ${nbaDraftDay(state.seasonNumber, window.openedOn, window.closesOn)}. Continue the offseason to reach draft day.`;
+  if (!entry) return `The NAL draft is on ${nbaDraftDay(state.seasonNumber, window.openedOn, window.closesOn)}. Continue the offseason to reach draft day.`;
   if (isDraftComplete(entry)) return null;
-  return entry.order[entry.picks.length] === state.managedClubId ? 'Your club is on the clock in the NBA draft. Make your pick on Transfers > Draft, or continue to let your assistant pick.' : 'The NBA draft is still under way. Continue the offseason to finish it.';
+  return entry.order[entry.picks.length] === state.managedClubId ? 'Your club is on the clock in the NAL draft. Make your pick on Transfers > Draft, or continue to let your assistant pick.' : 'The NAL draft is still under way. Continue the offseason to finish it.';
 }
 
 /** Advancing stops at the first response or expiry, so a decision cannot silently be skipped. */

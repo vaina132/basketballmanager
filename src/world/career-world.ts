@@ -405,7 +405,7 @@ export const NO_LOWER_DIVISION_COUNTRIES: readonly string[] = Object.freeze(['It
 /** NBA step 4 (format 90): the NBA league, its two conferences of three divisions of five clubs, and its ruleset. */
 function checkNba(world: CareerWorld): void {
   const fail = worldFail, nba = world.nba as unknown as Record<string, any>;
-  if (!exactKeys(nba, ['model', 'leagueId', 'conferences', 'ruleset', ...(Object.hasOwn(nba, 'cap') ? ['cap'] : []), ...(Object.hasOwn(nba, 'moves') ? ['moves'] : []), ...(Object.hasOwn(nba, 'draft') ? ['draft'] : []), ...(Object.hasOwn(nba, 'balance') ? ['balance'] : [])]) || nba.model !== 'nba-1' || nba.ruleset !== (Object.hasOwn(nba, 'balance') ? 'nba-2026b' : 'nba-2026') || Object.hasOwn(nba, 'balance') && (nba.balance !== 'nba-balance-1' || nba.draft !== 'nba-draft-1') || Object.hasOwn(nba, 'cap') && nba.cap !== 'nba-cap-1' || Object.hasOwn(nba, 'moves') && (nba.moves !== 'nba-moves-1' || nba.cap !== 'nba-cap-1') || Object.hasOwn(nba, 'draft') && (nba.draft !== 'nba-draft-1' || nba.cap !== 'nba-cap-1')) fail('world.nba', 'must name the NBA model, its league, conferences and ruleset');
+  if (!exactKeys(nba, ['model', 'leagueId', 'conferences', 'ruleset', ...(Object.hasOwn(nba, 'cap') ? ['cap'] : []), ...(Object.hasOwn(nba, 'moves') ? ['moves'] : []), ...(Object.hasOwn(nba, 'draft') ? ['draft'] : []), ...(Object.hasOwn(nba, 'balance') ? ['balance'] : [])]) || nba.model !== 'nba-1' || nba.ruleset !== (Object.hasOwn(nba, 'balance') ? 'nba-2026b' : 'nba-2026') || Object.hasOwn(nba, 'balance') && (nba.balance !== 'nba-balance-1' || nba.draft !== 'nba-draft-1') || Object.hasOwn(nba, 'cap') && nba.cap !== 'nba-cap-1' || Object.hasOwn(nba, 'moves') && (nba.moves !== 'nba-moves-1' || nba.cap !== 'nba-cap-1') || Object.hasOwn(nba, 'draft') && (nba.draft !== 'nba-draft-1' || nba.cap !== 'nba-cap-1')) fail('world.nba', 'must name the NAL model, its league, conferences and ruleset');
   const league = world.domesticLeagues?.find(item => item.id === nba.leagueId);
   if (!league || league.country !== 'USA' || league.tier !== 1 || league.clubIds.length !== 30) fail('world.nba.leagueId', 'must name the world\'s 30-club USA league');
   if (!Array.isArray(nba.conferences) || nba.conferences.length !== 2) fail('world.nba.conferences', 'must list two conferences');
@@ -446,7 +446,7 @@ function checkEuropeanCompetitions(world: CareerWorld, clubIds: ReadonlySet<stri
     // Format 60: with European places every played competition gives its entrants' countries (the places go by country).
     const needsCountries = protectedDraw || Object.hasOwn(world, 'europeanPlaces') && Object.hasOwn(entry, 'format');
     if (needsCountries !== Object.hasOwn(entry, 'countries')) fail(`${path}.countries`, needsCountries ? 'must give every entrant\'s country for the draw' : 'belong only to the BCL format or a world with European places');
-    if (Object.hasOwn(entry, 'oneYear') && (!Object.hasOwn(world, 'europeanPlaces') || entry.kind !== 'euroleague' || !Array.isArray(entry.oneYear) || new Set(entry.oneYear).size !== entry.oneYear.length || (entry.oneYear as unknown[]).some(id => !(entry.clubIds as unknown[]).includes(id)))) fail(`${path}.oneYear`, 'must list EuroLeague entrants on one-year places, in a world with European places');
+    if (Object.hasOwn(entry, 'oneYear') && (!Object.hasOwn(world, 'europeanPlaces') || entry.kind !== 'euroleague' || !Array.isArray(entry.oneYear) || new Set(entry.oneYear).size !== entry.oneYear.length || (entry.oneYear as unknown[]).some(id => !(entry.clubIds as unknown[]).includes(id)))) fail(`${path}.oneYear`, 'must list Euro Elite League entrants on one-year places, in a world with European places');
     if (needsCountries) {
       const countries = entry.countries as Record<string, unknown>;
       if (!exactKeys(countries, entry.clubIds) || (entry.clubIds as string[]).some(id => !isText(countries[id], 60))) fail(`${path}.countries`, 'must give every entrant\'s country for the draw');
@@ -525,13 +525,13 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   // Format 89: the spending balance marker, only with surplus spending.
   if (Object.hasOwn(world, 'spendingBalance') && (world.spendingBalance !== true || world.surplusSpending !== true)) fail('world.spendingBalance', 'must be true and needs surplus spending');
   // NBA step 10 (format 92): the NBA careers marker, only on worlds with the NBA.
-  if (Object.hasOwn(world, 'nbaJobs') && (world.nbaJobs !== true || !Object.hasOwn(world, 'nba'))) fail('world.nbaJobs', 'must be true and needs the NBA');
+  if (Object.hasOwn(world, 'nbaJobs') && (world.nbaJobs !== true || !Object.hasOwn(world, 'nba'))) fail('world.nbaJobs', 'must be true and needs the NAL');
   // NBA step 9 (format 94): the NBA trades marker, only on worlds with the NBA's money rules.
   // Format 97: the long-careers fixes marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'longCareers') && (world.longCareers !== true || !Object.hasOwn(world, 'economy'))) fail('world.longCareers', 'must be true and needs researched club money');
   // Format 98: the board and career balance marker.
   // Format 100: the EuroLeague jobs marker, only on worlds with domestic leagues and a EuroLeague, without the NBA.
-  if (Object.hasOwn(world, 'euroleagueJobs') && (world.euroleagueJobs !== true || !euroleagueJobsWorld(world))) fail('world.euroleagueJobs', 'must be true and needs a EuroLeague without the NBA');
+  if (Object.hasOwn(world, 'euroleagueJobs') && (world.euroleagueJobs !== true || !euroleagueJobsWorld(world))) fail('world.euroleagueJobs', 'must be true and needs a Euro Elite League without the NAL');
   if (Object.hasOwn(world, 'careerBalance') && (world.careerBalance !== true || !Object.hasOwn(world, 'domesticLeagues'))) fail('world.careerBalance', 'must be true and needs domestic leagues');
   // Format 99: the cash balance marker, only on worlds with researched money.
   if (Object.hasOwn(world, 'cashBalance') && (world.cashBalance !== true || !Object.hasOwn(world, 'economy'))) fail('world.cashBalance', 'must be true and needs researched club money');
@@ -548,12 +548,12 @@ export function validateWorld(value: unknown): asserts value is CareerWorld {
   // Format 106: the position profiles marker, only on real-data worlds (with domestic leagues).
   if (Object.hasOwn(world, 'positionProfiles') && (world.positionProfiles !== true || !world.domesticLeagues)) fail('world.positionProfiles', 'must be true and needs domestic leagues');
   // Format 107: the NBA free agency marker, only on worlds with the NBA's money rules.
-  if (Object.hasOwn(world, 'nbaFreeAgency') && (world.nbaFreeAgency !== true || world.nba?.cap !== 'nba-cap-1')) fail('world.nbaFreeAgency', 'must be true and needs the NBA\'s money rules');
+  if (Object.hasOwn(world, 'nbaFreeAgency') && (world.nbaFreeAgency !== true || world.nba?.cap !== 'nba-cap-1')) fail('world.nbaFreeAgency', 'must be true and needs the NAL\'s money rules');
   // Format 108: the academy position training marker, only with position profiles.
   if (Object.hasOwn(world, 'academyPositionTraining') && (world.academyPositionTraining !== true || world.positionProfiles !== true)) fail('world.academyPositionTraining', 'must be true and needs position profiles');
   // Format 109: the second-division balance marker, only with academy position training, researched club money and a second division.
   if (Object.hasOwn(world, 'secondDivisionBalance') && (world.secondDivisionBalance !== true || world.academyPositionTraining !== true || !world.economy || !hasLowerDivision(world))) fail('world.secondDivisionBalance', 'must be true and needs academy position training, club money and a second division');
-  if (Object.hasOwn(world, 'nbaTrades') && (world.nbaTrades !== true || world.nba?.cap !== 'nba-cap-1')) fail('world.nbaTrades', 'must be true and needs the NBA\'s money rules');
+  if (Object.hasOwn(world, 'nbaTrades') && (world.nbaTrades !== true || world.nba?.cap !== 'nba-cap-1')) fail('world.nbaTrades', 'must be true and needs the NAL\'s money rules');
   if (Object.hasOwn(world, 'rosterModel') && world.rosterModel !== FULL_ROSTER_MODEL) fail('world.rosterModel', 'has an unsupported value');
   if (!isText(world.id, 80) || !ID.test(world.id)) fail('world.id', 'must be a supported identifier');
   if (!isText(world.name)) fail('world.name', 'must be a nonempty, bounded text value');

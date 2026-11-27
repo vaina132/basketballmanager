@@ -36,8 +36,8 @@ const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:0
 
 function titlesText(coach: HeadCoach): string[] {
   const t = coach.titles, lines: string[] = []
-  if (t.nba) lines.push(`${t.nba} NBA championship${t.nba > 1 ? 's' : ''}`)
-  if (t.euroleague) lines.push(`${t.euroleague} EuroLeague title${t.euroleague > 1 ? 's' : ''}`)
+  if (t.nba) lines.push(`${t.nba} NAL championship${t.nba > 1 ? 's' : ''}`)
+  if (t.euroleague) lines.push(`${t.euroleague} Euro Elite League title${t.euroleague > 1 ? 's' : ''}`)
   if (t.europe) lines.push(`${t.europe} other European title${t.europe > 1 ? 's' : ''}`)
   if (t.league) lines.push(`${t.league} league title${t.league > 1 ? 's' : ''}`)
   if (t.cup) lines.push(`${t.cup} cup${t.cup > 1 ? 's' : ''}`)
@@ -81,6 +81,6 @@ export function CoachProfileDialog({ season, coachId, onClose }: { season: Seaso
       {coach.since ? <p className="coach-empty">Head coach since {coach.since}.</p> : null}
     </section>
     {spells.length ? <section aria-label="This career"><h3>This career</h3><ol className="coach-spells">{spells.map((spell, index) => <li key={index}><time dateTime={spell.from}>{formatDate(spell.from)}</time> {spell.clubId ? `${spell.reason === 'opening' ? 'Head coach of' : 'Appointed by'} ${clubName(spell.clubId)}` : spell.reason === 'displaced' ? 'Left his club: you took over' : spell.reason === 'sacked' ? 'Sacked' : 'Looking for a club'}</li>)}</ol></section> : null}
-    <p className="coach-source">{coach.generated ? 'Attributes and style are the game\'s estimate.' : <>Attributes and style are the game's estimate from his record{coach.source ? <> (<a href={coach.source} target="_blank" rel="noreferrer">source</a>)</> : null}.</>}</p>
+    <p className="coach-source">{coach.generated ? 'Attributes and style are the game\'s estimate.' : 'Attributes and style are the game\'s estimate from his record.'}</p>
   </dialog>
 }

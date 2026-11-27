@@ -1,4 +1,5 @@
 import type { Player, PlayerAttributes, SkillAttributes, Position, Team } from '../domain/types';
+import { packPlayerName } from './player-names';
 import { overallRating } from './performance-rating';
 import { withExtraAttributes } from './extra-attributes';
 
@@ -96,7 +97,9 @@ export async function parseDataPack(fileText: string): Promise<DataPack> {
   for (const raw of pack.competitions as Record<string, unknown>[]) if (raw.groups !== undefined) checkGroups(raw.groups, raw.clubIds as string[], String(raw.name));
   for (const raw of pack.clubs as Record<string, unknown>[]) if (raw.capacity !== undefined && (!Number.isInteger(raw.capacity) || (raw.capacity as number) < 500 || (raw.capacity as number) > 60_000)) fail(`${raw.name} has an invalid arena capacity`);
   for (const player of players.values()) if (!pack.clubs.some(raw => isObject(raw) && raw.id === player.clubId && Array.isArray(raw.playerIds) && raw.playerIds.includes(player.id))) fail(`${player.name} has an inconsistent club membership`);
-  return pack as unknown as DataPack;
+  // Real players appear under their close-sounding game names (owner decision, 27 November 2026).
+  const checked = pack as unknown as DataPack;
+  return { ...checked, players: checked.players.map(player => { const name = packPlayerName(player.id, player.name); return name === player.name ? player : { ...player, name }; }) };
 }
 
 /** A competition's groups: top-level groups partition its clubs, and each parent's groups partition the parent's clubs. */

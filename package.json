@@ -44,5 +44,6 @@
   },
   "engines": {
     "node": ">=24.14.0"
-  }
+  },
+  "author": "Gusto Games (https://gusto.games)"
 }

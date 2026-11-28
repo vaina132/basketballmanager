@@ -38,6 +38,7 @@ export function CreditsDialog({ onClose }: { onClose: () => void }) {
       <button ref={closeButton} id="credits-dialog-close" className="button small" onClick={onClose}><Icon name="close" size={15} />Close</button>
     </header>
     <div className="credits-dialog-body" tabIndex={0} role="region" aria-label="Credits">
+      <p className="credits-studio">Made by <a href="https://gusto.games" target="_blank" rel="noopener noreferrer">Gusto Games</a></p>
       <FlagCredit />
     </div>
   </dialog>

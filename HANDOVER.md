@@ -176,6 +176,7 @@ These need the owner's Windows machine: the private pack, API-Sports or Supabase
 ## Owner checks
 
 Browser checks still to do locally (by the owner, or by a local Claude session with Edge):
+0. **Studio credit (28 November 2026):** the game is published under the umbrella brand Gusto Games (gusto.games). The Credits dialog now opens with "Made by Gusto Games" linking to https://gusto.games; package.json author set. Check the line in the Credits dialog.
 1. **Promotion and relegation (3.4c), not yet browser-checked:**
    - Play or simulate a Spanish career (ACB and Primera FEB) through its season end. A full season takes about 6 minutes of simulation.
    - Check that Competition shows the champion and the promoted and relegated clubs.
